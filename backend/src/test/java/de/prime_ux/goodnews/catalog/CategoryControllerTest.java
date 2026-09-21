@@ -91,7 +91,7 @@ class CategoryControllerTest {
 	@Test
 	@AsUser("anna")
 	void countsTheFeedsOnEachCategory() throws Exception {
-		feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss"));
+		feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss", SourceType.FEED));
 
 		mockMvc.perform(get("/api/categories"))
 				.andExpect(status().isOk())
@@ -187,7 +187,7 @@ class CategoryControllerTest {
 	@Test
 	@AsUser("anna")
 	void deletesAnEmptyCategoryAndRefusesOneWithFeeds() throws Exception {
-		feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss"));
+		feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss", SourceType.FEED));
 
 		// The feed hangs on Fußball, which hangs on Sport: deleting either would take it along.
 		mockMvc.perform(delete("/api/categories/" + fussball.getId()).with(csrf()))

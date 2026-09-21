@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Beispiel News</title>
+    <link>https://beispiel.example/</link>
+    <description>Nachrichten aus dem Beispiel</description>
+    <item>
+      <title>Erste Meldung</title>
+      <link>https://beispiel.example/artikel/eins</link>
+      <guid isPermaLink="false">beispiel-1</guid>
+      <pubDate>Mon, 15 Sep 2026 08:30:00 +0200</pubDate>
+      <description>&lt;p&gt;Ein Teaser mit &lt;b&gt;Markup&lt;/b&gt;, das nicht durchkommen soll.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Zweite Meldung</title>
+      <link>https://beispiel.example/artikel/zwei</link>
+      <description>Kurzer Teaser ohne Markup.</description>
+    </item>
+  </channel>
+</rss>

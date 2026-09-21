@@ -35,6 +35,10 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.springframework.boot:spring-boot-starter-session-jdbc")
 	implementation("org.springframework.ai:spring-ai-starter-model-anthropic")
+	// Reading sources: Rome parses RSS 0.9 through 2.0 and Atom behind one interface,
+	// jsoup reads the HTML a feed has to be found in.
+	implementation("com.rometools:rome:2.1.0")
+	implementation("org.jsoup:jsoup:1.18.3")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")

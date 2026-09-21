@@ -30,7 +30,7 @@
   "categories": {
     "title": "Kategorien",
     "intro": "Die Themen, unter denen Nachrichten einsortiert werden. Zwei Ebenen: eine Oberkategorie kann Unterkategorien haben, und Quellen hängen immer an einer Kategorie ohne Unterkategorien.",
-    "empty": "Noch keine Kategorie angelegt.",
+    "empty": "Es ist noch keine Kategorie eingetragen.",
     "create": "Neue Kategorie",
     "createChild": "Unterkategorie zu {{name}} anlegen",
     "createTitle": "Neue Kategorie",
@@ -62,8 +62,8 @@
   },
   "feeds": {
     "title": "Quellen",
-    "intro": "Die RSS- und Atom-Feeds, aus denen die Nachrichten geholt werden. Jede Quelle gehört zu genau einer Kategorie.",
-    "empty": "Noch keine Quelle angelegt.",
+    "intro": "Die Quellen, aus denen die Nachrichten geholt werden. Im Regelfall ein RSS- oder Atom-Feed; wo eine Seite keinen anbietet, wird die Seite selbst gelesen. Jede Quelle gehört zu genau einer Kategorie.",
+    "empty": "Es ist noch keine Quelle eingetragen.",
     "noCategories": "Es gibt noch keine Kategorie ohne Unterkategorien. Legen Sie zuerst eine an.",
     "create": "Neue Quelle",
     "createTitle": "Neue Quelle",
@@ -90,7 +90,20 @@
     "createError": "Die Quelle konnte nicht angelegt werden.",
     "saveError": "Die Quelle konnte nicht gespeichert werden.",
     "deleteError": "Die Quelle konnte nicht gelöscht werden.",
-    "loadError": "Die Quellen konnten nicht geladen werden. Läuft das Backend?"
+    "loadError": "Die Quellen konnten nicht geladen werden. Läuft das Backend?",
+    "type": "Typ",
+    "typeFeed": "Feed",
+    "typePage": "Webseite",
+    "typeFeedHint": "Die Adresse des Feeds, aus dem gelesen wird.",
+    "typePageHint": "Diese Seite wird direkt ausgelesen, weil sie keinen Feed anbietet.",
+    "searchUrl": "Adresse der Webseite",
+    "search": "Suchen",
+    "searchHint": "Die normale Adresse genügt, etwa heise.de. Die Feed-Adresse sucht der Server selbst.",
+    "searchError": "Die Adresse konnte nicht geprüft werden.",
+    "foundCount": "{{count}} Feeds gefunden — bitte einen auswählen:",
+    "entryCount": "{{count}} Einträge",
+    "noFeedFound": "Zu dieser Adresse wurde kein Feed gefunden.",
+    "takePage": "Seite direkt auslesen"
   },
   "picks": {
     "title": "Meine Auswahl",

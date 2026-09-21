@@ -7,7 +7,7 @@
     <p class="text-surface-500 dark:text-surface-400">{{ t('feeds.intro') }}</p>
 
     @if (categoryOptions().length === 0 && !categoriesService.categories.isLoading()) {
-      <!-- A feed needs a category to hang on, so the way out is named rather than left to guesswork. -->
+      <!-- A source needs a category to hang on, so the way out is named rather than left to guesswork. -->
       <p-message severity="info" variant="simple">{{ t('feeds.noCategories') }}</p-message>
     }
 
@@ -20,6 +20,7 @@
           <tr>
             <th scope="col">{{ t('feeds.name') }}</th>
             <th scope="col">{{ t('feeds.category') }}</th>
+            <th scope="col">{{ t('feeds.type') }}</th>
             <th scope="col">{{ t('feeds.url') }}</th>
             <th scope="col">{{ t('feeds.actions') }}</th>
           </tr>
@@ -28,6 +29,12 @@
           <tr>
             <td class="font-medium">{{ row.name }}</td>
             <td>{{ row.categoryName }}</td>
+            <td>
+              <p-tag
+                [severity]="row.type === 'FEED' ? 'success' : 'warn'"
+                [value]="t(row.type === 'FEED' ? 'feeds.typeFeed' : 'feeds.typePage')"
+              />
+            </td>
             <td>
               <a [href]="row.url" target="_blank" rel="noopener noreferrer" class="break-all underline">{{ row.url }}</a>
             </td>
@@ -57,56 +64,146 @@
         </ng-template>
         <ng-template #emptymessage>
           <tr>
-            <td colspan="4" class="text-center text-surface-500 dark:text-surface-400">{{ t('feeds.empty') }}</td>
+            <td colspan="5" class="text-center text-surface-500 dark:text-surface-400">{{ t('feeds.empty') }}</td>
           </tr>
         </ng-template>
       </p-table>
     }
 
     <p-dialog
-      [header]="t(editingId() === null ? 'feeds.createTitle' : 'feeds.editTitle')"
+      [header]="t(isEditing() ? 'feeds.editTitle' : 'feeds.createTitle')"
       [modal]="true"
       [(visible)]="isDialogVisible"
-      [style]="{ width: '32rem' }"
+      [style]="{ width: '34rem' }"
     >
       <form novalidate class="flex flex-col gap-4 pt-2" (submit)="onSave($event)">
-        <div class="flex flex-col gap-2">
-          <p-floatlabel variant="on">
-            <input pInputText id="feed-name" type="text" autocomplete="off" [formField]="feedForm.name" />
-            <label for="feed-name">{{ t('feeds.name') }}</label>
-          </p-floatlabel>
-          @if (feedForm.name().invalid()) {
-            <p-message severity="error" variant="simple" size="small">{{ t('feeds.nameRequired') }}</p-message>
+        @if (!isEditing()) {
+          <!-- The way in is an ordinary web address. Feed addresses are what the search is for. -->
+          <div class="flex flex-col gap-2">
+            <div class="flex items-end gap-2">
+              <p-floatlabel variant="on" class="flex-auto">
+                <input
+                  pInputText
+                  id="feed-search"
+                  type="text"
+                  autocomplete="off"
+                  class="w-full"
+                  [value]="searchUrl()"
+                  (input)="onSearchInput($event)"
+                />
+                <label for="feed-search">{{ t('feeds.searchUrl') }}</label>
+              </p-floatlabel>
+              <p-button
+                type="button"
+                icon="pi pi-search"
+                [label]="t('feeds.search')"
+                [loading]="isSearching()"
+                [disabled]="searchUrl().trim().length === 0"
+                (onClick)="onSearch()"
+              />
+            </div>
+            <p class="text-sm text-surface-500 dark:text-surface-400">{{ t('feeds.searchHint') }}</p>
+          </div>
+
+          @if (searchFailed()) {
+            <p-message severity="error" variant="simple">{{ t('feeds.searchError') }}</p-message>
+          } @else if (foundFeeds(); as found) {
+            @if (found.length === 0) {
+              <div class="flex flex-col gap-2">
+                <p-message severity="info" variant="simple">{{ t('feeds.noFeedFound') }}</p-message>
+                <div>
+                  <p-button
+                    type="button"
+                    severity="secondary"
+                    [outlined]="true"
+                    icon="pi pi-file"
+                    [label]="t('feeds.takePage')"
+                    (onClick)="onTakePage()"
+                  />
+                </div>
+              </div>
+            } @else {
+              <fieldset class="flex flex-col gap-1">
+                <legend class="mb-1 text-sm font-medium">{{ t('feeds.foundCount', { count: found.length }) }}</legend>
+                @for (candidate of found; track candidate.url) {
+                  <label
+                    class="flex cursor-pointer items-start gap-2 rounded-lg border p-2"
+                    [class.border-primary]="isPicked(candidate)"
+                    [class.border-surface-200]="!isPicked(candidate)"
+                    [class.dark:border-surface-700]="!isPicked(candidate)"
+                  >
+                    <input
+                      type="radio"
+                      name="found-feed"
+                      class="mt-1 size-4 accent-primary"
+                      [checked]="isPicked(candidate)"
+                      (change)="onPickFeed(candidate)"
+                    />
+                    <span class="flex flex-col">
+                      <span class="font-medium">{{ candidate.title }}</span>
+                      <span class="text-xs break-all text-surface-500 dark:text-surface-400">{{ candidate.url }}</span>
+                      <span class="text-xs text-surface-500 dark:text-surface-400">
+                        {{ t('feeds.entryCount', { count: candidate.entryCount }) }}
+                      </span>
+                    </span>
+                  </label>
+                }
+              </fieldset>
+            }
           }
-        </div>
-        <div class="flex flex-col gap-2">
-          <p-floatlabel variant="on">
-            <input pInputText id="feed-url" type="url" autocomplete="off" [formField]="feedForm.url" (input)="onUrlInput()" />
-            <label for="feed-url">{{ t('feeds.url') }}</label>
-          </p-floatlabel>
-          @if (isUrlTaken()) {
-            <p-message severity="error" variant="simple" size="small">{{ t('feeds.urlTaken') }}</p-message>
-          } @else if (feedForm.url().invalid()) {
-            <p-message severity="error" variant="simple" size="small">{{ t('feeds.urlInvalid') }}</p-message>
-          } @else {
-            <p class="text-sm text-surface-500 dark:text-surface-400">{{ t('feeds.urlHint') }}</p>
-          }
-        </div>
-        <div class="flex flex-col gap-2">
-          <p-floatlabel variant="on">
-            <p-select
-              inputId="feed-category"
-              [options]="categoryOptions()"
-              optionLabel="label"
-              optionValue="value"
-              [formField]="feedForm.categoryId"
-            />
-            <label for="feed-category">{{ t('feeds.category') }}</label>
-          </p-floatlabel>
-          @if (feedForm.categoryId().invalid()) {
-            <p-message severity="error" variant="simple" size="small">{{ t('feeds.categoryRequired') }}</p-message>
-          }
-        </div>
+        }
+
+        @if (hasSource() || isEditing()) {
+          <div class="flex flex-col gap-2">
+            <p-floatlabel variant="on">
+              <input pInputText id="feed-name" type="text" autocomplete="off" class="w-full" [formField]="feedForm.name" />
+              <label for="feed-name">{{ t('feeds.name') }}</label>
+            </p-floatlabel>
+            @if (feedForm.name().invalid()) {
+              <p-message severity="error" variant="simple" size="small">{{ t('feeds.nameRequired') }}</p-message>
+            }
+          </div>
+          <div class="flex flex-col gap-2">
+            <p-floatlabel variant="on">
+              <input
+                pInputText
+                id="feed-url"
+                type="url"
+                autocomplete="off"
+                class="w-full"
+                [formField]="feedForm.url"
+                (input)="onUrlInput()"
+              />
+              <label for="feed-url">{{ t('feeds.url') }}</label>
+            </p-floatlabel>
+            @if (isUrlTaken()) {
+              <p-message severity="error" variant="simple" size="small">{{ t('feeds.urlTaken') }}</p-message>
+            } @else if (feedForm.url().invalid()) {
+              <p-message severity="error" variant="simple" size="small">{{ t('feeds.urlInvalid') }}</p-message>
+            } @else {
+              <p class="text-sm text-surface-500 dark:text-surface-400">
+                {{ t(type() === 'FEED' ? 'feeds.typeFeedHint' : 'feeds.typePageHint') }}
+              </p>
+            }
+          </div>
+          <div class="flex flex-col gap-2">
+            <p-floatlabel variant="on">
+              <p-select
+                inputId="feed-category"
+                styleClass="w-full"
+                [options]="categoryOptions()"
+                optionLabel="label"
+                optionValue="value"
+                [formField]="feedForm.categoryId"
+              />
+              <label for="feed-category">{{ t('feeds.category') }}</label>
+            </p-floatlabel>
+            @if (feedForm.categoryId().invalid()) {
+              <p-message severity="error" variant="simple" size="small">{{ t('feeds.categoryRequired') }}</p-message>
+            }
+          </div>
+        }
+
         <div class="flex justify-end gap-2">
           <p-button
             type="button"
@@ -115,7 +212,13 @@
             [label]="t('feeds.cancel')"
             (onClick)="isDialogVisible.set(false)"
           />
-          <p-button type="submit" icon="pi pi-check" [label]="t('feeds.save')" [loading]="isSaving()" [disabled]="feedForm().invalid()" />
+          <p-button
+            type="submit"
+            icon="pi pi-check"
+            [label]="t('feeds.save')"
+            [loading]="isSaving()"
+            [disabled]="feedForm().invalid() || (!hasSource() && !isEditing())"
+          />
         </div>
       </form>
     </p-dialog>
