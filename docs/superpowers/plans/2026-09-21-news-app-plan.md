@@ -2,25 +2,32 @@
 
 Stand: 2026-09-21. Grundlage: [Entwurf](../specs/2026-09-21-news-app-design.md).
 
-Vier Schritte, jeder für sich lauffähig, testbar und mergefähig. Gearbeitet wird auf
-`feature/next01`; committet und gepusht wird erst auf Ansage, gemergt von Hand über GitHub.
-Vor jedem Commit läuft `node scripts/verify.mjs` durch.
+Fünf Schritte, jeder für sich lauffähig, testbar und mergefähig. Gearbeitet wird auf einem
+Feature-Branch je Schritt; committet und gepusht wird erst auf Ansage, gemergt von Hand über
+GitHub. Vor jedem Commit läuft `node scripts/verify.mjs` durch.
+
+Schritt 3 kam nach der Umstellung dazu, die Kategorie an die einzelne Meldung zu hängen statt an
+die Quelle. Er baut zurück, was Schritt 1 an Baum und Quellen-Kategorie angelegt hat, und richtet
+die Auswahl neu aus. Die alten Schritte 3 und 4 sind dadurch zu 4 und 5 geworden.
 
 ## Inhalt
 
 - [Was für alle Schritte gilt](#was-für-alle-schritte-gilt)
 - [Schritt 1 — Katalog und Auswahl](#schritt-1--katalog-und-auswahl) ✅
-- [Schritt 2 — Quellen finden](#schritt-2--quellen-finden)
-- [Schritt 3 — Quellen holen und anzeigen](#schritt-3--quellen-holen-und-anzeigen)
-- [Schritt 4 — KI-Auswertung](#schritt-4--ki-auswertung)
+- [Schritt 2 — Quellen finden](#schritt-2--quellen-finden) ✅
+- [Schritt 3 — Kategorien an die Meldung](#schritt-3--kategorien-an-die-meldung)
+- [Schritt 4 — Quellen holen und anzeigen](#schritt-4--quellen-holen-und-anzeigen)
+- [Schritt 5 — KI-Auswertung](#schritt-5--ki-auswertung)
 - [Reihenfolge und Abhängigkeiten](#reihenfolge-und-abhängigkeiten)
 
 ## Was für alle Schritte gilt
 
-**Migrationen.** `V1__create_schema.sql` ist die Baseline, `V2` kam mit Schritt 1. Schritt 2
-bringt `V3` (die Spalte `type` an den Quellen), Schritt 3 bringt `V4` (Artikel und Läufe). Schritt
-4 braucht keine: Die Spalten `positive_summary`, `ranking` und `processed_at` legt schon `V4` an,
-nullable, und sie bleiben bis dahin leer. Eine spätere `ALTER TABLE` wäre unnötiger Verschleiß.
+**Migrationen.** `V1__create_schema.sql` ist die Baseline, `V2` kam mit Schritt 1, `V3` mit
+Schritt 2 (die Spalte `type` an den Quellen). Schritt 3 bringt `V4` (Kategorien flach, Quellen
+ohne Kategorie, Auswahl auf Kategorien umgestellt), Schritt 4 bringt `V5` (Artikel und Läufe).
+Schritt 5 braucht keine: Die Spalten `positive_summary`, `ranking`, `category_id` und
+`processed_at` legt schon `V5` an, nullable, und sie bleiben bis dahin leer. Eine spätere
+`ALTER TABLE` wäre unnötiger Verschleiß.
 
 **Sheriff.** Die neue Domäne `news` passt ohne Konfigurationsänderung in
 `src/app/domains/<domain>/<type>`. Nichts an `sheriff.config.ts` anzufassen ist das Ziel; wenn doch
@@ -34,7 +41,8 @@ Endpunktgruppe, einen Test auf Mandantentrennung und einen e2e-Test je neuer Sei
 
 ## Schritt 1 — Katalog und Auswahl
 
-**Erledigt**, gemergt als PR #1.
+**Erledigt**, gemergt als PR #1. Was hier über den Kategorienbaum und die Kategorie an der Quelle
+steht, beschreibt den damaligen Stand; Schritt 3 räumt beides wieder ab.
 
 Ziel: Der Admin pflegt Kategorien und Quellen, der Benutzer wählt daraus. Noch kein Abruf, keine
 Artikel, keine KI. Die Startseite bleibt vorerst die leere Testseite.
@@ -77,7 +85,7 @@ Artikel, keine KI. Die Startseite bleibt vorerst die leere Testseite.
 ### Frontend
 
 8. **Domänengerüst** `src/app/domains/news` mit `api`, `feat-catalog`, `feat-picks`, `ui`, `data`,
-   `model`. `feat-board` kommt in Schritt 2.
+   `model`. `feat-board` kommt in Schritt 4.
 
 9. **`model/`** — `Category`, `Feed`, `CatalogNode`; dazu `buildTree()`, das aus der flachen Liste
    den Baum macht. Frameworkfrei, mit eigenen Tests. Hier gehören auch die Regeln hin, die die
@@ -98,7 +106,7 @@ Artikel, keine KI. Die Startseite bleibt vorerst die leere Testseite.
     Änderungen fragt ein `CanDeactivate`-Guard beim Verlassen nach.
 
 14. **Routen und Navigation** — die drei Seiten in `app.routes.ts` (`/categories` und `/feeds` hinter
-    `adminGuard`, `/picks` hinter `tenantGuard`), Sidebar-Gruppe von *Vorgänge* auf **Nachrichten**
+    `adminGuard`, `/picks` hinter `tenantGuard`), Sidebar-Gruppe von _Vorgänge_ auf **Nachrichten**
     umbenennen, Einträge ergänzen.
 
 15. **Tests** — je Seite ein Komponententest, `buildTree()` und die Auswahllogik als
@@ -112,6 +120,8 @@ Quelle, und ein normaler Benutzer wählt davon eine aus und findet sie nach dem 
 
 ## Schritt 2 — Quellen finden
 
+**Erledigt**, gemergt als PR #2.
+
 Ziel: Der Admin fügt eine gewöhnliche Seiten-URL ein und bekommt die Feeds gezeigt, die es dazu
 gibt. Findet sich keiner, kann er die Seite als Quelle vom Typ `PAGE` anlegen. Noch kein Abruf von
 Artikeln — nur das Anlegen wird erwachsen.
@@ -119,7 +129,7 @@ Artikeln — nur das Anlegen wird erwachsen.
 ### Backend
 
 1. **Abhängigkeit** `com.rometools:rome`. Die Suche muss jeden Kandidaten parsen, um ihn zu
-   bestätigen, und der Parser ist derselbe, den Schritt 3 zum Abrufen braucht.
+   bestätigen, und der Parser ist derselbe, den Schritt 4 zum Abrufen braucht.
 
 2. **Migration `V3__add_source_type.sql`** — Spalte `type` an `feeds`, `NOT NULL DEFAULT 'FEED'`
    mit `CHECK (type IN ('FEED', 'PAGE'))`. Was schon im Katalog steht, ist ein Feed.
@@ -164,15 +174,102 @@ Artikeln — nur das Anlegen wird erwachsen.
 Der Admin fügt `heise.de` ein, bekommt zwei Feeds angeboten, wählt einen und findet ihn danach in
 der Tabelle. Für `nfl.com` meldet die Suche nichts und bietet an, die Seite direkt auszulesen.
 
-## Schritt 3 — Quellen holen und anzeigen
+## Schritt 3 — Kategorien an die Meldung
+
+Ziel: Eine Quelle hat keine Kategorie mehr, die Kategorienliste wird flach, und der Benutzer kreuzt
+Kategorien an statt Quellen. Noch kein Abruf und keine Artikel — dieser Schritt richtet nur das
+Modell aus, damit Schritt 4 darauf aufsetzen kann, statt es später auseinanderzunehmen.
+
+### Backend
+
+1. **Migration `V4__categories_per_article.sql`** — in dieser Reihenfolge:
+
+   - Die Kinder auf die oberste Ebene heben. Wo dadurch zwei Namen kollidieren würden, bekommt das
+     gehobene Kind den Namen seiner alten Oberkategorie vorangestellt. Eine Zeile SQL, die man
+     wahrscheinlich nie braucht — der Demo-Seeder legt keine Kategorien an —, aber eine
+     fehlschlagende Migration auf einer gewachsenen Entwicklerdatenbank ist teurer.
+   - `categories.parent_id` samt Index löschen, die beiden Teilindizes auf den Namen durch einen
+     gewöhnlichen eindeutigen Index auf `(tenant_id, lower(name))` ersetzen.
+   - `feeds.category_id` samt Index löschen.
+   - `user_feeds` löschen, `user_categories` anlegen: `id`, `user_id`, `category_id`, eindeutig als
+     Paar, beide Fremdschlüssel mit `ON DELETE CASCADE`.
+
+2. **`Category` entkernen** — `parent`, `isTopLevel()`, `moveTo(parent, sortOrder)` und
+   `requireAssignableParent` fallen weg. Übrig bleiben Name und Reihenfolge. Der Klassenkommentar
+   erklärt künftig nicht mehr den Baum, sondern wofür die Liste da ist: Sie ist der Wortschatz, aus
+   dem die KI jede Meldung einsortiert.
+
+3. **`Feed` entkernen** — `category` raus, aus dem Konstruktor und aus `update`.
+
+4. **`CategoryController`** — `parentId` und `feedCount` fallen aus `CategoryRequest` und
+   `CategoryResponse`, `CategoryFeedCount` wird gelöscht. Die Tiefenprüfung entfällt. Das Löschen
+   antwortet nie mehr 409, weil keine Quelle mehr an einer Kategorie hängt; die Eindeutigkeit des
+   Namens gilt jetzt je Mandant statt je Elternkategorie.
+
+5. **`FeedController`** — `categoryId` aus Anfrage und Antwort. Damit fällt auch die Vorbedingung
+   weg, dass es erst eine Kategorie geben muss, bevor man eine Quelle anlegen kann.
+
+6. **Paket `subscriptions` umbauen** — `UserFeed` wird `UserCategory`, das Repository wandert mit.
+   `CatalogResponse` weicht einem `PickedCategoryResponse` aus `id`, `name`, `sortOrder` und
+   `selected`; `PicksRequest` nimmt `categoryIds` statt `feedIds`. `GET /api/news/catalog` wird
+   `GET /api/news/categories`. Die Regel „fremde Id ergibt 400" bleibt, wie sie ist.
+
+7. **Tests** — `CategoryControllerTest` verliert den Fall mit der Tiefenbegrenzung und den mit der
+   409 beim Löschen einer belegten Kategorie und bekommt dafür einen auf den doppelten Namen
+   innerhalb eines Mandanten und einen darauf, dass Löschen jetzt durchgeht.
+   `FeedControllerTest` verliert alles rund um die Kategorie. `SubscriptionControllerTest` wird auf
+   Kategorien umgeschrieben, samt dem Fall mit der fremden Kategorie-Id. Die Tests auf
+   Mandantentrennung bleiben überall stehen.
+
+### Frontend
+
+8. **`model/category.ts` kürzen** — `Category` verliert `parentId` und `feedCount`,
+   `CategoryInput` verliert `parentId`, `Feed` verliert `categoryId` und `categoryName`,
+   `FeedInput` verliert `categoryId`. `CatalogCategory` und `CatalogFeed` weichen einem
+   `PickedCategory` aus `id`, `name`, `sortOrder` und `selected`.
+
+9. **`model/category-tree.ts` löschen**, samt Spec. `buildTree`, `isLeaf`, `leaves` und
+   `siblingPosition` haben nichts mehr zu ordnen. An ihre Stelle tritt ein `sortCategories()` nach
+   Reihenfolge und bei Gleichstand nach Namen, das die Sortierregel und ihren Test erbt.
+
+10. **Seite Kategorien umbauen** — `p-table` statt `p-tree`: Name, Reihenfolge, die Knöpfe hoch und
+    runter, Dialog zum Anlegen und Umbenennen. Kein Elternfeld, kein „Unterkategorie anlegen", kein
+    Drag & Drop über Ebenen. Unter der Tabelle der Satz dazu, dass die Liste der Wortschatz der KI
+    ist. Löschen fragt weiterhin nach, kann aber nicht mehr abgelehnt werden.
+
+11. **Seite Quellen** — Spalte Kategorie und das Auswahlfeld im Dialog raus.
+
+12. **Seite Meine Auswahl umbauen** — eine flache Liste mit einem Kästchen je Kategorie. Die
+    verschachtelte Anzeige, die Kästchen an den Quellen und die halb angehakten Kategorien
+    entfallen; Speichern-Knopf und der `CanDeactivate`-Guard bleiben unverändert. Dazu der Hinweis,
+    dass die Auswahl nur die Anzeige ordnet und nichts einspart.
+
+13. **Übersetzungen** — raus: `categories.createChild`, `.parent`, `.parentHint`,
+    `.parentPinned`, `.feedCount`, `.hasFeeds` sowie `feeds.category`, `.categoryRequired`,
+    `.noCategories`. Neu: der Hinweistext unter der Kategorientabelle, der Hinweis auf der
+    Auswahlseite und `picks.noCategories`. Deutsch und Englisch gleichzeitig.
+
+14. **Tests** — die drei Komponententests und die drei e2e-Specs `categories`, `feeds` und `picks`
+    auf die neue Oberfläche ziehen. `sortCategories()` bekommt den Modelltest, den
+    `category-tree.spec.ts` abgibt.
+
+### Fertig, wenn
+
+Ein Admin pflegt eine flache Liste aus Politik, Soziales und Sport, legt eine Quelle ohne Kategorie
+an und löscht eine Kategorie, ohne dass ihn etwas daran hindert. Ein normaler Benutzer kreuzt zwei
+Kategorien an und findet sie nach dem Neuladen wieder. `node scripts/verify.mjs` läuft durch.
+
+## Schritt 4 — Quellen holen und anzeigen
 
 Ziel: Der Knopf holt die gewählten Quellen — Feeds wie Webseiten — und die Übersicht zeigt die
 Meldungen in Tabs. Noch ohne KI: Die Karte zeigt den Originaltitel und den Teaser.
 
 ### Backend
 
-1. **Migration `V4__create_articles_and_runs.sql`** — `articles` und `news_runs`. Die Spalten
-   `positive_summary`, `ranking` und `processed_at` sind dabei und bleiben leer.
+1. **Migration `V5__create_articles_and_runs.sql`** — `articles` und `news_runs`. Die Spalten
+   `positive_summary`, `ranking`, `category_id` und `processed_at` sind dabei und bleiben leer.
+   `articles.category_id` zeigt auf `categories` mit `ON DELETE SET NULL`. `news_runs` hat kein
+   `user_id`: Ein Lauf gehört dem Mandanten.
 
 2. **`PageReader`** (Paket `news`) — das Gegenstück zum `FeedReader` aus Schritt 2, mit derselben
    Schnittstelle: URL rein, Einträge raus. Zwei Züge, wie im Entwurf beschrieben — Links
@@ -189,81 +286,93 @@ Meldungen in Tabs. Noch ohne KI: Die Karte zeigt den Originaltitel und den Tease
    stehen lassen, verschwundene löschen. Das ist die Aufbewahrungsregel aus dem Entwurf, an genau
    einer Stelle.
 
-5. **`NewsRunner`** — legt den Lauf an, arbeitet die Quellen des auslösenden Benutzers ab, zählt
-   mit. Läuft über einen `TaskExecutor`; `@EnableAsync` kommt an `GoodNewsApplication`. Ein Lauf
-   älter als fünfzehn Minuten auf `RUNNING` wird beim nächsten Start auf `FAILED` gesetzt. Die
-   KI-Stufe ist hier noch eine leere Methode, die Schritt 4 füllt.
+5. **`NewsRunner`** — legt den Lauf an, arbeitet **alle Quellen des Mandanten** ab, zählt mit.
+   Läuft über einen `TaskExecutor`; `@EnableAsync` kommt an `GoodNewsApplication`. Ein zweiter
+   Start liefert den laufenden Lauf zurück, gleich wer drückt. Ein Lauf älter als fünfzehn Minuten
+   auf `RUNNING` wird beim nächsten Start auf `FAILED` gesetzt. Die KI-Stufe ist hier noch eine
+   leere Methode, die Schritt 5 füllt.
 
 6. **`NewsController`** — `POST /api/news/runs`, `GET /api/news/runs/{id}`, `GET /api/news/articles`
-   (gruppiert nach Blatt-Kategorie; `minRanking` wird schon entgegengenommen und wirkt noch nicht,
-   weil kein Artikel ein Ranking hat).
+   (mit der Kategorie je Artikel; `minRanking` wird schon entgegengenommen). Beides wirkt in diesem
+   Schritt noch nicht: Ohne KI hat kein Artikel ein Ranking und keine Kategorie, also liegt alles
+   unter _Sonstiges_. Das ist der ehrliche Zwischenstand und genau das, was der Tab abdecken soll.
 
 7. **Tests** — `PageReaderTest` gegen abgelegte HTML-Dateien: eine Übersichtsseite mit echten und
    unechten Links, eine Artikelseite mit Open-Graph-Angaben, eine ohne, und eine leere Hülle, wie
    sie eine per JavaScript gefüllte Seite hinterlässt. `ArticleStoreTest` für Anlegen, Behalten und
    Löschen. `NewsRunnerTest` für die Zähler, für eine kaputte Quelle mitten im Lauf, für den
    zweiten Start und dafür, dass beide Quellentypen im selben Lauf nebeneinander laufen.
-   `NewsControllerTest` für die Endpunkte.
+   `NewsControllerTest` für die Endpunkte, darunter der zweite Start durch einen anderen Benutzer
+   desselben Mandanten.
 
 ### Frontend
 
-8. **Seite Übersicht** (`feat-board`) — `p-tabs`, ein Tab je Blatt-Kategorie mit Auswahl. Darüber
-   der Knopf **Aktualisieren**; während eines Laufs an seiner Stelle der Fortschritt.
+8. **Seite Übersicht** (`feat-board`) — `p-tabs`, ein Tab je angekreuzter Kategorie, in der etwas
+   liegt, und dahinter _Sonstiges_ für die Meldungen ohne Zuordnung. Wer nichts angekreuzt hat,
+   bekommt alle. Darüber der Knopf **Aktualisieren**; während eines Laufs an seiner Stelle der
+   Fortschritt. Die Gruppierung samt dem Eimer _Sonstiges_ sitzt in `model/` und wird dort
+   frameworkfrei geprüft.
 
 9. **`NewsRunStore`** — startet den Lauf, fragt alle zwei Sekunden nach und lädt die Artikel nach,
    solange sich der Zähler bewegt. NgRx Signals Store, wie `AuthStore` es vormacht.
 
 10. **Artikelkarte** (`ui/`) — Titel als Link, Quelle, Zeitpunkt. Die positive Kernaussage und das
-    Ranking kommen in Schritt 4 dazu; die Karte wird dafür erweitert, nicht ersetzt.
+    Ranking kommen in Schritt 5 dazu; die Karte wird dafür erweitert, nicht ersetzt.
 
 11. **Startseite umhängen** — die Übersicht wird die Route `''`, `domains/playground` fliegt raus,
     samt Testseite, Übersetzungsschlüsseln und e2e-Spec.
 
 12. **Tests** — Komponententest für die Übersicht, Modelltest für die Gruppierung, e2e mit einem
-    Lauf, der über zwei Abfragen von *läuft* auf *fertig* springt.
+    Lauf, der über zwei Abfragen von _läuft_ auf _fertig_ springt.
 
 ### Fertig, wenn
 
-Ein Benutzer mit einem Feed und einer Webseite unter seinen Quellen drückt Aktualisieren, sieht den
-Fortschritt und danach in den Tabs die aktuellen Meldungen aus beiden, jede mit Link auf das
-Original. Eine Quelle mit falscher URL markiert sich auf der Quellen-Seite mit ihrem Fehler, ohne
-den Lauf zu stoppen.
+Ein Mandant mit einem Feed und einer Webseite unter seinen Quellen: Ein Benutzer drückt
+Aktualisieren, sieht den Fortschritt und danach unter _Sonstiges_ die aktuellen Meldungen aus
+beiden, jede mit Link auf das Original. Drückt währenddessen ein zweiter Benutzer, sieht er
+denselben Fortschritt. Eine Quelle mit falscher URL markiert sich auf der Quellen-Seite mit ihrem
+Fehler, ohne den Lauf zu stoppen.
 
-## Schritt 4 — KI-Auswertung
+## Schritt 5 — KI-Auswertung
 
-Ziel: Jede Meldung bekommt eine positiv formulierte Kernaussage und ein Ranking, und die Liste
-lässt sich darüber eindampfen. Keine Migration.
+Ziel: Jede Meldung bekommt eine positiv formulierte Kernaussage, eine Kategorie und ein Ranking,
+und die Liste lässt sich darüber eindampfen. Erst hier füllen sich die Tabs. Keine Migration.
 
 ### Backend
 
 1. **`ArticleProcessor`** — nimmt bis zu zehn unverarbeitete Artikel, baut daraus einen Auftrag,
    ruft `ChatClients.forTenant(tenant)` und liest die Antwort über `.entity(...)` in einen Record.
-   Kommen weniger Einträge zurück als hineingingen oder passt eine Nummer nicht, bleiben die
-   betroffenen Artikel unverarbeitet.
+   In den Auftrag gehen zusätzlich die Kategorienamen des Mandanten, zurück kommt je Artikel einer
+   davon. Der Name wird ohne Rücksicht auf Groß- und Kleinschreibung gegen die Liste abgeglichen;
+   was nicht trifft, lässt `category_id` leer. Kommen weniger Einträge zurück als hineingingen oder
+   passt eine Nummer nicht, bleiben die betroffenen Artikel unverarbeitet.
 
 2. **Der Auftrag an das Modell** — Kernaussage benennen, den konstruktiven Teil nach vorn, nichts
-   hinzuerfinden, nichts beschönigen. Für das Ranking der Maßstab aus dem Entwurf: 0–3 Randnotiz,
-   4–6 Alltägliches, 7–8 Bemerkenswertes, 9–10 Einschneidendes, gemessen innerhalb des Gebiets.
-   Der Text gehört in eine eigene Datei unter `resources`, nicht in einen Java-String, damit man ihn
-   ändern kann, ohne den Code zu lesen.
+   hinzuerfinden, nichts beschönigen. Die Kategorie aus der mitgegebenen Liste wählen, und
+   ausdrücklich keine, wenn nichts passt. Für das Ranking der Maßstab aus dem Entwurf: 0–3
+   Randnotiz, 4–6 Alltägliches, 7–8 Bemerkenswertes, 9–10 Einschneidendes, gemessen innerhalb der
+   gerade vergebenen Kategorie. Der Text gehört in eine eigene Datei unter `resources`, nicht in
+   einen Java-String, damit man ihn ändern kann, ohne den Code zu lesen.
 
-3. **`NewsRunner` erweitern** — die leere Stufe aus Schritt 2 ruft jetzt den Prozessor, Bündel für
+3. **`NewsRunner` erweitern** — die leere Stufe aus Schritt 4 ruft jetzt den Prozessor, Bündel für
    Bündel, und zählt nach jedem Bündel hoch.
 
 4. **`minRanking` wirksam machen** — Artikel ohne Auswertung kommen bei jeder Schwelle mit.
 
 5. **Kein KI-Zugang** — der Lauf endet als `FAILED` mit einem Text, der auf die Seite KI-Zugang
-   verweist. Die Artikel sind dann geholt und stehen unbewertet da.
+   verweist. Die Artikel sind dann geholt und stehen unbewertet unter _Sonstiges_.
 
 6. **Tests** — `ArticleProcessorTest` gegen `StubChatClients` aus den bestehenden Testquellen:
-   Bündelung, Auslesen des Rankings, unvollständige Antwort, scheiternder Aufruf. Dazu der Fall
-   ohne Zugang im `NewsRunnerTest`.
+   Bündelung, Auslesen des Rankings, Zuordnung der Kategorie über den Namen samt abweichender
+   Groß- und Kleinschreibung, ein unbekannter Kategoriename, eine leer gelassene Kategorie,
+   unvollständige Antwort, scheiternder Aufruf. Dazu der Fall ohne Zugang im `NewsRunnerTest`,
+   nach dem alles unter _Sonstiges_ liegt.
 
 ### Frontend
 
 7. **Artikelkarte erweitern** — die Kernaussage wird die Überschrift, der Originaltitel rutscht
    darunter als Link, das Ranking steht als Zahl daneben. Artikel ohne Auswertung stehen am Ende
-   mit dem Hinweis *noch nicht bewertet*.
+   mit dem Hinweis _noch nicht bewertet_.
 
 8. **Ranking-Schwelle** — Auswahl über den Tabs, gilt für alle. Die gewählte Schwelle merkt sich
    der Browser, wie `ThemeService` und `UserColumnsService` es vormachen.
@@ -275,20 +384,31 @@ lässt sich darüber eindampfen. Keine Migration.
 
 ### Fertig, wenn
 
-Nach einem Lauf steht in jedem Tab die positive Kernaussage je Meldung mit ihrem Ranking, und eine
-Schwelle von 7 lässt nur noch das Wesentliche stehen.
+Ein Feed von t-online.de landet nach einem Lauf verteilt in den Tabs Politik, Soziales und Sport,
+je Meldung mit positiver Kernaussage und Ranking. Eine Schwelle von 7 lässt nur noch das
+Wesentliche stehen, und was die KI nicht einordnen konnte, steht unter _Sonstiges_.
 
 ## Reihenfolge und Abhängigkeiten
 
 Die Schritte bauen strikt aufeinander auf:
 
 - Schritt 2 braucht den Katalog aus Schritt 1, um die gefundene Quelle irgendwo abzulegen.
-- Schritt 3 braucht den Feed-Leser aus Schritt 2 und das Typ-Feld, das dort dazukommt.
-- Schritt 4 braucht die Artikel aus Schritt 3, um sie zu bewerten.
+- Schritt 3 räumt das Modell aus Schritt 1 um. Er muss vor Schritt 4 liegen: Sonst entstehen
+  `articles` und die Übersicht gegen den Baum und die Quellen-Kategorie und müssten gleich darauf
+  wieder auseinandergenommen werden.
+- Schritt 4 braucht den Feed-Leser aus Schritt 2, das Typ-Feld von dort und die flache
+  Kategorienliste aus Schritt 3.
+- Schritt 5 braucht die Artikel aus Schritt 4, um sie zu bewerten, und die Kategorienliste, aus der
+  das Modell wählt.
 
 Innerhalb eines Schrittes geht das Backend voran: Steht der Endpunkt, kann die Seite dagegen
 gebaut werden, und die e2e-Tests mocken ohnehin. Was sich parallelisieren lässt, ist das
 Modell-Paket im Frontend — `buildTree()` und die Filter hängen an keinem Endpunkt.
+
+Schritt 3 ist der einzige, der Bestehendes abräumt statt etwas anzubauen. Im Backend geht es
+voran wie sonst; im Frontend hängen die drei Seiten und das Modell-Paket so eng an denselben
+Typen, dass sie in einem Zug fallen — erst `model/`, dann die Seiten, dann die Übersetzungen und
+Tests.
 
 Nach jedem Schritt ein Commit-Satz und ein PR, den du von Hand mergst. `main` ist geschützt, ein
 direkter Push geht ohnehin nicht.
