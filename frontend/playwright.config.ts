@@ -23,11 +23,16 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   // Locally: start (or reuse) the dev server on 4200. In CI: serve the
-  // production build instead (`serve:dist` over `dist/frontend/browser`, built
-  // by the workflow beforehand) — it catches production-only bugs. Same URL
-  // either way, so the specs don't care which server answers.
+  // production build instead (over `dist/frontend/browser`, built by the
+  // workflow beforehand) — it catches production-only bugs. Same URL either
+  // way, so the specs don't care which server answers.
+  //
+  // The CI branch calls the binary rather than the `serve:dist` script: a kill
+  // at teardown reaches the package manager, not the server it spawned, and
+  // Playwright then waits for a process that never ends. That branch only ever
+  // runs on Linux, so the POSIX path is safe.
   webServer: {
-    command: isCI ? 'pnpm serve:dist' : 'pnpm start',
+    command: isCI ? './node_modules/.bin/serve --single --listen 4200 dist/frontend/browser' : 'pnpm start',
     url: 'http://localhost:4200',
     reuseExistingServer: !isCI,
     timeout: 120_000,
