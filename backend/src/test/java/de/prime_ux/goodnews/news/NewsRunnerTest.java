@@ -108,15 +108,19 @@ class NewsRunnerTest {
 		assertThat(this.feedRepository.findById(feed.getId()).orElseThrow().hasError()).isFalse();
 	}
 
+	/**
+	 * The pass in flight is written here rather than started: a pass over a stubbed feed is over
+	 * in milliseconds, and a second start after the first one ended is quite correctly a second
+	 * pass. Starting twice in a row would test how fast the machine is, not the rule.
+	 */
 	@Test
 	void joinsTheRunAlreadyGoingRatherThanStartingASecond() {
 		feed("Beispiel Feed", FEED_URL);
+		NewsRun going = this.runRepository.save(new NewsRun(this.tenant));
 
-		NewsRun first = this.newsRunner.start(this.tenant);
-		NewsRun second = this.newsRunner.start(this.tenant);
+		NewsRun joined = this.newsRunner.start(this.tenant);
 
-		assertThat(second.getId()).isEqualTo(first.getId());
-		awaitFinish(first);
+		assertThat(joined.getId()).isEqualTo(going.getId());
 		assertThat(this.runRepository.count()).isOne();
 	}
 

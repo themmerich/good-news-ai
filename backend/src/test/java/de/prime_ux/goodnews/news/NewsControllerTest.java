@@ -105,14 +105,19 @@ class NewsControllerTest {
 	/**
 	 * A run belongs to the tenant, not to whoever pressed. Two people pressing share one pass and
 	 * one progress bar rather than fetching the same sources twice over.
+	 *
+	 * <p>The pass in flight is written here rather than started, because a run over no sources is
+	 * finished before a second call can reach it — and a second press after the first pass ended
+	 * is quite correctly a second pass. Pressing twice in a row would test the clock, not the rule.
 	 */
 	@Test
 	@AsUser("ben")
 	void givesASecondPresserTheRunThatIsAlreadyGoing() throws Exception {
-		UUID first = startRun();
-		UUID second = startRunAs(this.uwe);
+		NewsRun going = this.runRepository.save(new NewsRun(this.tenant));
 
-		assertThat(second).isEqualTo(first);
+		UUID joined = startRunAs(this.uwe);
+
+		assertThat(joined).isEqualTo(going.getId());
 		assertThat(this.runRepository.count()).isOne();
 	}
 
