@@ -1,0 +1,83 @@
+<ng-container *transloco="let t">
+  <main class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <h1 class="text-2xl font-semibold">{{ t('board.title') }}</h1>
+      <div class="flex flex-wrap items-center gap-2">
+        <label for="board-threshold" class="text-sm text-surface-500 dark:text-surface-400">{{ t('board.threshold') }}</label>
+        <!-- The browser own select: four values, keyboard-reachable, and nothing a widget would add. -->
+        <select
+          id="board-threshold"
+          class="rounded-lg border border-surface-300 bg-transparent p-2 dark:border-surface-600"
+          [value]="articlesService.minRanking()"
+          (change)="onThresholdChange($event)"
+        >
+          @for (threshold of thresholds; track threshold) {
+            <option [value]="threshold">{{ t('board.thresholdOption', { ranking: threshold }) }}</option>
+          }
+        </select>
+        <p-button
+          icon="pi pi-refresh"
+          [label]="t('board.refresh')"
+          [loading]="runStore.isRunning()"
+          [disabled]="runStore.isRunning()"
+          (onClick)="onRefresh()"
+        />
+      </div>
+    </div>
+    <p class="text-surface-500 dark:text-surface-400">{{ t('board.intro') }}</p>
+
+    @if (runStore.isRunning()) {
+      <div class="flex flex-col gap-2" role="status">
+        <span class="text-sm text-surface-500 dark:text-surface-400">{{ t('board.running') }}</span>
+        @if (runStore.progress(); as progress) {
+          <p-progressbar [value]="progress" />
+        } @else {
+          <p-progressbar mode="indeterminate" [style]="{ height: '6px' }" />
+        }
+      </div>
+    } @else if (runStore.failedToStart()) {
+      <p-message severity="error" variant="simple">{{ t('board.startError') }}</p-message>
+    } @else if (runStore.lastError(); as error) {
+      <p-message severity="warn" variant="simple">{{ t('board.runFailed', { error: error }) }}</p-message>
+    }
+
+    <!-- value() throws while the resource is in the error state, so the board only renders in the else branch. -->
+    @if (articlesService.articles.error()) {
+      <p class="text-red-600 dark:text-red-400">{{ t('board.loadError') }}</p>
+    } @else if (hasNothingAtAll()) {
+      <p-message severity="info" variant="simple">{{ t('board.empty') }}</p-message>
+    } @else {
+      <p-tabs [(value)]="openTab">
+        <p-tablist>
+          @for (tab of board().tabs; track tab.category.id) {
+            <p-tab [value]="tab.category.id">{{ tab.category.name }} ({{ tab.articles.length }})</p-tab>
+          }
+          @if (board().unplaced.length > 0) {
+            <p-tab [value]="unplacedTab">{{ t('board.unplaced') }} ({{ board().unplaced.length }})</p-tab>
+          }
+        </p-tablist>
+        <p-tabpanels>
+          @for (tab of board().tabs; track tab.category.id) {
+            <p-tabpanel [value]="tab.category.id">
+              <ul class="m-0 flex list-none flex-col gap-3 p-0">
+                @for (article of tab.articles; track article.id) {
+                  <li><app-article-card [article]="article" /></li>
+                }
+              </ul>
+            </p-tabpanel>
+          }
+          @if (board().unplaced.length > 0) {
+            <p-tabpanel [value]="unplacedTab">
+              <p class="mb-3 text-sm text-surface-500 dark:text-surface-400">{{ t('board.unplacedHint') }}</p>
+              <ul class="m-0 flex list-none flex-col gap-3 p-0">
+                @for (article of board().unplaced; track article.id) {
+                  <li><app-article-card [article]="article" /></li>
+                }
+              </ul>
+            </p-tabpanel>
+          }
+        </p-tabpanels>
+      </p-tabs>
+    }
+  </main>
+</ng-container>

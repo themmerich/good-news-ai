@@ -1,6 +1,7 @@
 {
   "shell": {
     "workspace": "News",
+    "board": "Board",
     "administration": "Administration",
     "users": "Users",
     "company": "Company",
@@ -21,6 +22,22 @@
     "picks": "My picks",
     "categories": "Categories",
     "feeds": "Sources"
+  },
+  "board": {
+    "title": "Board",
+    "intro": "The stories from every source the tenant has, one tab per category.",
+    "refresh": "Refresh",
+    "running": "Fetching the sources …",
+    "threshold": "From ranking",
+    "thresholdOption": "from {{ranking}}",
+    "unplaced": "Other",
+    "unplacedHint": "Stories without a category: not rated yet, or the AI could not place them.",
+    "notRated": "not rated yet",
+    "rankingLabel": "Ranking {{ranking}} out of 10",
+    "empty": "No stories yet. Press Refresh to fetch the sources.",
+    "startError": "The run could not be started.",
+    "runFailed": "The last run failed: {{error}}",
+    "loadError": "Could not load the stories. Is the backend running?"
   },
   "categories": {
     "title": "Categories",

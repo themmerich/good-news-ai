@@ -13,6 +13,9 @@ test.describe('Login', () => {
   test.beforeEach(async ({ page }) => {
     // The login fetches a CSRF token before it posts; without a backend the mock answers.
     await page.route('**/api/auth/csrf', (route) => route.fulfill({ status: 204 }));
+    // Signing in lands on the board, which asks for the categories and the stories.
+    await page.route('**/api/news/categories', (route) => route.fulfill({ json: [] }));
+    await page.route(/\/api\/news\/articles/, (route) => route.fulfill({ json: [] }));
   });
 
   test('redirects anonymous visitors to the login page', async ({ page }) => {
@@ -22,8 +25,7 @@ test.describe('Login', () => {
 
     await page.goto('/');
 
-    // The root sends them on to the picks first, so that is what they return to after signing in.
-    await expect(page).toHaveURL(/\/login\?returnUrl=%2Fpicks$/);
+    await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByLabel('Benutzername')).toBeVisible();
     await expect(page.getByLabel('Passwort')).toBeVisible();
   });
@@ -46,7 +48,7 @@ test.describe('Login', () => {
     await page.getByLabel('Passwort').fill('secret');
     await page.getByRole('button', { name: 'Anmelden' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Meine Auswahl' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Übersicht' })).toBeVisible();
     expect(sent).toEqual({ tenant: 'musterfirma', username: 'admin', password: 'secret' });
     // The sidebar footer shows who is signed in, and for which tenant; the
     // company name also brands the sidebar's top, hence first().

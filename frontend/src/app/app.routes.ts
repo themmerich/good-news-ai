@@ -19,12 +19,10 @@ export const routes: Routes = [
     canActivate: [authGuard],
     children: [
       {
-        // Nothing of its own lives at the root yet: the board that belongs here comes with the
-        // fetching, and until then the picks are the one page every signed-in user has. The
-        // redirect is what the board replaces, so nothing else has to move.
+        // The start page is about a tenant: a super-user with none open is sent to the tenants page.
         path: '',
-        pathMatch: 'full',
-        redirectTo: 'picks',
+        canActivate: [tenantGuard],
+        loadChildren: () => import('./domains/news/api/board-routes').then((m) => m.boardRoutes),
       },
       {
         path: 'tenants',

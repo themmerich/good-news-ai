@@ -97,8 +97,9 @@ test.describe('Company', () => {
     });
 
     // First visit: the brand arrives with the answer and is remembered from then on.
-    // The start page is the picks now, so any route that lands there asks for the categories.
+    // The start page is the board, which asks for the categories and the stories.
     await page.route('**/api/news/categories', (route) => route.fulfill({ json: [] }));
+    await page.route(/\/api\/news\/articles/, (route) => route.fulfill({ json: [] }));
     await page.goto('/');
     // The brand area at the top; the same name stands in the footer under the user.
     await expect(page.getByText('Musterfirma AG').first()).toBeVisible();
@@ -136,8 +137,9 @@ test.describe('Company', () => {
       return route.fulfill({ json: company });
     });
 
-    // The start page is the picks now, so any route that lands there asks for the categories.
+    // The start page is the board, which asks for the categories and the stories.
     await page.route('**/api/news/categories', (route) => route.fulfill({ json: [] }));
+    await page.route(/\/api\/news\/articles/, (route) => route.fulfill({ json: [] }));
     await page.goto('/');
     // The sidebar brands with the loaded company name (brand area and footer).
     await expect(page.getByText('Musterfirma GmbH').first()).toBeVisible();
@@ -303,11 +305,12 @@ test.describe('Company', () => {
     await page.route('**/api/auth/me', (route) => route.fulfill({ json: regularUser }));
     await page.route('**/api/company', (route) => route.fulfill({ json: company }));
     await page.route('**/api/news/categories', (route) => route.fulfill({ json: [] }));
+    await page.route(/\/api\/news\/articles/, (route) => route.fulfill({ json: [] }));
 
     await page.goto('/company');
 
     // The admin guard sends them to the start page; the sidebar offers no administration section.
-    await expect(page.getByRole('heading', { name: 'Meine Auswahl' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Übersicht' })).toBeVisible();
     await expect(page.getByText('Administration')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Firma' })).toHaveCount(0);
   });
