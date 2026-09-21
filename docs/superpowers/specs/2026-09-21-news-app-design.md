@@ -1,6 +1,7 @@
 # News-App — Entwurf
 
-Stand: 2026-09-21. Status: abgestimmt, noch nicht umgesetzt.
+Stand: 2026-09-21. Status: abgestimmt. Schritt 1 (Katalog und Auswahl) ist umgesetzt; die
+Quellensuche und der Typ `PAGE` kamen nach einer Rückfrage dazu und stehen noch aus.
 
 <!-- Das Dokument ist auf Deutsch, weil es die Vorlage für eine Entscheidung ist und das
      Gespräch dazu auf Deutsch lief. Code, Kommentare und Commits im Repo bleiben Englisch. -->
@@ -9,10 +10,12 @@ Stand: 2026-09-21. Status: abgestimmt, noch nicht umgesetzt.
 
 - [Worum es geht](#worum-es-geht)
 - [Getroffene Entscheidungen](#getroffene-entscheidungen)
+- [Quellen finden](#quellen-finden)
 - [Bausteine](#bausteine)
 - [Datenmodell](#datenmodell)
 - [Endpunkte](#endpunkte)
 - [Ablauf eines Laufs](#ablauf-eines-laufs)
+- [Wie eine Webseite gelesen wird](#wie-eine-webseite-gelesen-wird)
 - [Der KI-Aufruf](#der-ki-aufruf)
 - [Die drei Seiten](#die-drei-seiten)
 - [Verhalten im Fehlerfall](#verhalten-im-fehlerfall)
@@ -21,9 +24,11 @@ Stand: 2026-09-21. Status: abgestimmt, noch nicht umgesetzt.
 
 ## Worum es geht
 
-Ein Admin pflegt einen Katalog aus Nachrichtenkategorien und RSS-Quellen. Jeder Benutzer wählt
-daraus die Quellen, die ihn interessieren. Auf Knopfdruck holt der Server diese Feeds, schickt
-jede Meldung durch die KI und zeigt das Ergebnis auf einer Seite an, ein Tab je Kategorie.
+Ein Admin pflegt einen Katalog aus Nachrichtenkategorien und Quellen. Eine Quelle ist im Regelfall
+ein RSS- oder Atom-Feed; wo eine Seite keinen anbietet, wird die Seite selbst gelesen. Jeder
+Benutzer wählt aus dem Katalog die Quellen, die ihn interessieren. Auf Knopfdruck holt der Server
+sie, schickt jede Meldung durch die KI und zeigt das Ergebnis auf einer Seite an, ein Tab je
+Kategorie.
 
 Die KI macht zwei Dinge pro Meldung: sie zieht die Kernaussage heraus und formuliert sie positiv,
 und sie vergibt ein Ranking von 0 (unwichtig) bis 10 (sehr wichtig). Über das Ranking lässt sich
@@ -33,11 +38,40 @@ die Liste eindampfen, etwa auf alles ab 7.
 
 | Frage                           | Entscheidung                          | Warum                                                                                                |
 | ------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Woher die Nachrichten kommen    | RSS und Atom                          | Strukturiert, stabil, rechtlich unbedenklich. Kein Auslesen von HTML-Seiten.                          |
+| Woher die Nachrichten kommen    | RSS und Atom, ersatzweise die Webseite | Ein Feed ist strukturiert, stabil und rechtlich unbedenklich und bleibt deshalb der Normalfall. Wo keiner existiert, wird die Seite selbst gelesen — siehe [Quellen finden](#quellen-finden). |
 | Wem der Katalog gehört          | dem Mandanten, gepflegt vom Admin     | Der Benutzer wählt aus dem Pool, legt aber nichts an.                                                 |
 | Wann geholt wird                | auf Knopfdruck                        | Kein Scheduler in der ersten Fassung.                                                                 |
 | Wie der Knopf sich verhält      | Lauf im Hintergrund, Frontend fragt nach | Ein Lauf dauert bis zu einer Minute. Das überlebt keine synchrone HTTP-Antwort, und man will Fortschritt sehen. |
 | Wie lange Artikel bleiben       | nur was aktuell im Feed steht         | Kleinste Datenmenge. Preis: Eine Meldung, die aus dem Feed fällt und später wiederkehrt, kostet erneut einen KI-Aufruf. |
+
+## Quellen finden
+
+Der Admin fügt eine gewöhnliche Seiten-URL ein, nicht die Adresse eines Feeds. Feed-Adressen
+kennt kaum jemand auswendig, und die Seiten verstecken sie: von vier Beispielseiten verlinkt genau
+eine ihren Feed dort, wo man ihn vermutet.
+
+Der Server sucht in vier Schritten und prüft jeden Fund, indem er ihn holt und mit dem Feed-Leser
+zu parsen versucht:
+
+1. **Ist die URL selbst schon ein Feed?**
+2. **`<link rel="alternate">` im Kopf der Seite** — der vorgesehene Weg, den kaum noch jemand geht.
+3. **Das geholte HTML nach Adressen durchsuchen**, die auf `.xml` oder `.rdf` enden oder `rss`,
+   `feed` oder `atom` enthalten.
+4. **Gängige Pfade und Hosts durchprobieren**: `/feed`, `/rss`, `/rss.xml`, `/feed.xml`,
+   `/atom.xml`, `/index.xml`, `/?feed=rss2` sowie die Subdomain `rss.<domain>`.
+
+Was sich als Feed parsen lässt, kommt mit Titel und Anzahl der Einträge in eine Liste; der Admin
+wählt daraus aus. Findet sich nichts, bietet die Seite an, **die Webseite selbst auszulesen** — die
+Quelle bekommt dann den Typ `PAGE` statt `FEED`.
+
+An vier Seiten geprüft, Stand 2026-09-21:
+
+| Seite          | Ergebnis                                        |
+| -------------- | ----------------------------------------------- |
+| `t-online.de`  | Schritt 2 — der Feed steht ordentlich im Kopf.  |
+| `heise.de`     | Schritt 3 — die Startseite schweigt, aber das Seitengerüst jeder Fehlerseite nennt beide Feeds. |
+| `golem.de`     | Schritt 4 — die eigene RSS-Übersicht wird per JavaScript nachgeladen und ist für den Server leer; `rss.golem.de` liefert direkt einen Feed. |
+| `nfl.com`      | nichts gefunden — diese Quelle wird eine vom Typ `PAGE`. |
 
 ## Bausteine
 
@@ -96,11 +130,20 @@ werden zu Tabs.
 
 ### `feeds`
 
-`id`, `tenant_id`, `category_id`, `name`, `url`, `last_fetched_at`, `last_error`, `created_at`
+`id`, `tenant_id`, `category_id`, `name`, `url`, `type`, `last_fetched_at`, `last_error`,
+`created_at`
 
 `category_id` zeigt auf ein Blatt. Die URL ist je Mandant eindeutig, damit dieselbe Quelle nicht
 mehrfach geholt wird. `last_error` hält fest, woran der letzte Abruf gescheitert ist, und ist
 leer, solange alles ging.
+
+`type` ist `FEED` oder `PAGE` und entscheidet, welcher Leser die Quelle anfasst. Alles andere an
+der Quelle ist für beide gleich, und was hinten herauskommt — ein Artikel mit Titel, Link, Datum
+und Teaser — ebenfalls. Deshalb merkt der Rest der Anwendung von dem Unterschied nichts.
+
+Tabelle und Entity heißen weiterhin `feeds` und `Feed`, obwohl die Oberfläche von **Quellen**
+spricht und eine Quelle nun auch eine Webseite sein kann. Das ist bewusst so gelassen worden; wer
+den Code liest, sollte es wissen.
 
 ### `user_feeds`
 
@@ -142,13 +185,11 @@ sich die Artikel und damit die KI-Kosten.
 | `POST`   | `/api/feeds`           | Anlegen.                                                        |
 | `PUT`    | `/api/feeds/{id}`      | Ändern, auch die Kategorie.                                     |
 | `DELETE` | `/api/feeds/{id}`      | Löschen, Artikel gehen mit.                                     |
-| `POST`   | `/api/feeds/probe`     | URL prüfen, siehe unten.                                        |
+| `POST`   | `/api/feeds/probe`     | Feeds zu einer Seiten-URL suchen, siehe [Quellen finden](#quellen-finden). |
 
-`probe` nimmt eine beliebige Seiten-URL entgegen. Ist es schon ein Feed, wird er gelesen und sein
-Titel zurückgegeben. Ist es eine HTML-Seite, sucht der Server darin
-`<link rel="alternate" type="application/rss+xml">` und folgt dem. So muss niemand Feed-URLs von
-Hand zusammensuchen. Antwort: gefundene Feed-URL, Titel, Zahl der Einträge — oder ein Grund,
-warum nichts gefunden wurde.
+`probe` nimmt eine beliebige Seiten-URL entgegen und antwortet mit allen Feeds, die sich dazu
+finden und parsen ließen — je Feed die Adresse, der Titel und die Zahl der Einträge. Findet sich
+keiner, sagt die Antwort das, und die Seite bietet an, die Quelle als `PAGE` anzulegen.
 
 ### Auswahl und Übersicht, für jeden angemeldeten Benutzer
 
@@ -188,6 +229,36 @@ mit offenem Mandanten.
 
 Der Lauf selbst läuft in einem eigenen Thread, damit die HTTP-Antwort sofort zurückgeht.
 
+## Wie eine Webseite gelesen wird
+
+Eine Übersichtsseite hat keine Struktur, an der man sich festhalten könnte: Zwischen Navigation,
+Werbung und Fußbereich stehen irgendwo die Artikel. Die NFL-Nachrichtenseite bringt 437 Links in
+1,5 MB HTML mit. Das einer KI vorzulegen, wäre in Zeit und Geld nicht zu rechtfertigen — es wären
+rund 400.000 Token für einen einzigen Abruf.
+
+Stattdessen in zwei Zügen, ohne KI und ohne seitenspezifische Regeln:
+
+1. **Links einsammeln und filtern.** Alle `<a href>` der Seite, behalten wird, was auf dieselbe
+   Domain zeigt, einen Pfad mit mindestens zwei Abschnitten hat, einen Ankertext von mehr als
+   dreißig Zeichen trägt und noch nicht dabei war. Aus 437 Links werden so um die dreißig
+   Kandidaten.
+2. **Von jedem Kandidaten den Kopf lesen.** Ein Abruf je Artikel, ausgewertet werden nur
+   `og:title`, `og:description` und `article:published_time`. Diese Angaben sind auf
+   Nachrichtenseiten praktisch immer da, weil Facebook und WhatsApp sie brauchen.
+
+Heraus kommen Titel, Teaser und Datum — dieselben Felder, die ein Feed liefert. Ab da ist eine
+Seite von einem Feed nicht mehr zu unterscheiden, und Ranking und Kernaussage arbeiten auf
+demselben Material.
+
+Der Preis sind die zusätzlichen Abrufe: dreißig kleine Anfragen je Seite und Lauf statt einer.
+Sie laufen nacheinander mit kurzer Pause, damit die Quelle das nicht als Angriff auffasst, und der
+Lauf nimmt höchstens dreißig Kandidaten je Seite mit.
+
+Was damit **nicht** geht: Seiten, die ihren Inhalt erst per JavaScript nachladen. Für den Server
+sind sie leer. Das ließe sich nur mit einem kopflosen Browser lösen, und das ist eine ganz andere
+Größenordnung. Trifft es eine Quelle, sagt sie das als Fehler — „keine Artikel gefunden" — statt
+stumm nichts zu liefern.
+
 ## Der KI-Aufruf
 
 Ein Aufruf verarbeitet zehn Artikel. Hineingegeben werden je Artikel eine laufende Nummer, der
@@ -220,10 +291,13 @@ belegten Kategorien.
 
 ### Quellen (Admin)
 
-Tabelle mit Name, Kategorie, URL und Stand des letzten Abrufs. Beim Anlegen trägt man eine URL ein
-und drückt **Prüfen**; der Server meldet zurück, welchen Feed er gefunden hat und wie er heißt,
-und der Name wird als Vorschlag übernommen. Eine Quelle mit Fehler beim letzten Abruf ist in der
-Tabelle markiert, mit dem Fehlertext als Tooltip.
+Tabelle mit Name, Kategorie, URL, Typ und Stand des letzten Abrufs. Eine Quelle mit Fehler beim
+letzten Abruf ist markiert, mit dem Fehlertext als Tooltip.
+
+Beim Anlegen trägt man eine gewöhnliche Seiten-URL ein — `heise.de` genügt — und drückt **Suchen**.
+Der Server antwortet mit den Feeds, die er dazu gefunden hat, je mit Titel und Anzahl der
+Einträge; daraus wählt man einen oder mehrere aus, und der Titel wird als Name vorgeschlagen.
+Findet sich keiner, bietet die Seite an, die Webseite direkt auszulesen.
 
 ### Meine Auswahl (Benutzer)
 
@@ -251,6 +325,10 @@ Die gewählte Ranking-Schwelle merkt sich der Browser, wie es `ThemeService` und
 **Ein Feed antwortet nicht, liefert kaputtes XML oder braucht zu lange.** Der Fehlertext landet in
 `last_error`, der Lauf macht mit dem nächsten Feed weiter. Zeitlimit zehn Sekunden je Feed,
 höchstens fünfzig Einträge je Abruf, damit ein einzelner Riesen-Feed den Lauf nicht auffrisst.
+
+**Eine Seite liefert keine Artikel.** Entweder lädt sie ihren Inhalt per JavaScript nach, oder der
+Filter hat alles verworfen. Die Quelle bekommt „keine Artikel gefunden" als `last_error`, damit
+der Admin sie auf der Quellen-Seite sieht, statt sich zu wundern, warum ein Tab leer bleibt.
 
 **Ein KI-Bündel scheitert.** Die Artikel bleiben unverarbeitet, erscheinen als *noch nicht bewertet*
 und gehen beim nächsten Lauf erneut mit. Der Lauf endet als `DONE`.
@@ -291,9 +369,13 @@ Scheduler ihn später nur anstoßen muss.
 zehn Feeds mit je zwanzig Meldungen sind rund zwanzig Sonnet-Aufrufe, und im Moment sieht das
 niemand. Wenn die Kosten interessant werden, ist das der nächste Kandidat.
 
-**Kein Nachladen des Artikeltextes.** Die KI sieht nur, was der Feed liefert. Viele Feeds geben
-Titel und zwei Sätze, manche nur den Titel — daraus wird die Kernaussage entsprechend dünn. Den
-verlinkten Artikel zu holen wäre das Auslesen von HTML-Seiten, das bei der Quellenfrage bewusst
-abgewählt wurde. Erst mit dem Teaser starten und sehen, wie gut es trägt.
+**Kein Nachladen des Artikeltextes.** Die KI sieht bei einem Feed nur, was der Feed liefert, und
+bei einer Seite nur, was deren Open-Graph-Angaben hergeben — also Titel und zwei, drei Sätze.
+Manche Feeds geben nur den Titel; daraus wird die Kernaussage entsprechend dünn. Den ganzen
+Artikeltext zu holen und auszuwerten wäre der nächste Schritt, wenn sich zeigt, dass der Teaser
+nicht trägt.
+
+**Keine Seiten, die ihren Inhalt per JavaScript nachladen.** Siehe
+[Wie eine Webseite gelesen wird](#wie-eine-webseite-gelesen-wird).
 
 **Kein Gelesen-Status, keine Merkliste, keine Suche.** Nichts davon war gefordert.
