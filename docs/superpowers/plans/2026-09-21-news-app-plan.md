@@ -269,7 +269,9 @@ Meldungen in Tabs. Noch ohne KI: Die Karte zeigt den Originaltitel und den Tease
 1. **Migration `V5__create_articles_and_runs.sql`** — `articles` und `news_runs`. Die Spalten
    `positive_summary`, `ranking`, `category_id` und `processed_at` sind dabei und bleiben leer.
    `articles.category_id` zeigt auf `categories` mit `ON DELETE SET NULL`. `news_runs` hat kein
-   `user_id`: Ein Lauf gehört dem Mandanten.
+   `user_id`: Ein Lauf gehört dem Mandanten. Der Index auf die laufenden Läufe ist eindeutig und
+   partiell — je Mandant höchstens ein `RUNNING` —, weil zwei gleichzeitige Knopfdrücke sonst ein
+   Wettrennen sind, das keine Prüfung vorher schließt.
 
 2. **`PageReader`** (Paket `news`) — das Gegenstück zum `FeedReader` aus Schritt 2, mit derselben
    Schnittstelle: URL rein, Einträge raus. Zwei Züge, wie im Entwurf beschrieben — Links
@@ -287,17 +289,23 @@ Meldungen in Tabs. Noch ohne KI: Die Karte zeigt den Originaltitel und den Tease
    einer Stelle.
 
 5. **`NewsRunner`** — legt den Lauf an, arbeitet **alle Quellen des Mandanten** ab, zählt mit.
-   Läuft über einen `TaskExecutor`; `@EnableAsync` kommt an `GoodNewsApplication`. Ein zweiter
+   Läuft über den `applicationTaskExecutor`, ausdrücklich benannt, weil der Kontext zwei
+   `TaskExecutor` hält. Kein `@EnableAsync`: Ohne `@Async`-Annotationen täte es nichts, und der
+   Lauf wird direkt auf den Executor gelegt. Ein zweiter
    Start liefert den laufenden Lauf zurück, gleich wer drückt. Ein Lauf älter als fünfzehn Minuten
    auf `RUNNING` wird beim nächsten Start auf `FAILED` gesetzt. Die KI-Stufe ist hier noch eine
    leere Methode, die Schritt 5 füllt.
 
-6. **`NewsController`** — `POST /api/news/runs`, `GET /api/news/runs/{id}`, `GET /api/news/articles`
+6. **`Feed` um den letzten Abruf erweitern** — `last_fetched_at` und `last_error` stehen seit
+   `V2` in der Tabelle und waren nie abgebildet; ab hier tragen sie etwas. Die Quellen-Seite
+   markiert damit eine Quelle, deren letzter Versuch scheiterte.
+
+7. **`NewsController`** — `POST /api/news/runs`, `GET /api/news/runs/{id}`, `GET /api/news/articles`
    (mit der Kategorie je Artikel; `minRanking` wird schon entgegengenommen). Beides wirkt in diesem
    Schritt noch nicht: Ohne KI hat kein Artikel ein Ranking und keine Kategorie, also liegt alles
    unter _Sonstiges_. Das ist der ehrliche Zwischenstand und genau das, was der Tab abdecken soll.
 
-7. **Tests** — `PageReaderTest` gegen abgelegte HTML-Dateien: eine Übersichtsseite mit echten und
+8. **Tests** — `JsoupPageReaderTest` gegen abgelegte HTML-Dateien: eine Übersichtsseite mit echten und
    unechten Links, eine Artikelseite mit Open-Graph-Angaben, eine ohne, und eine leere Hülle, wie
    sie eine per JavaScript gefüllte Seite hinterlässt. `ArticleStoreTest` für Anlegen, Behalten und
    Löschen. `NewsRunnerTest` für die Zähler, für eine kaputte Quelle mitten im Lauf, für den
@@ -307,23 +315,26 @@ Meldungen in Tabs. Noch ohne KI: Die Karte zeigt den Originaltitel und den Tease
 
 ### Frontend
 
-8. **Seite Übersicht** (`feat-board`) — `p-tabs`, ein Tab je angekreuzter Kategorie, in der etwas
+9. **Seite Übersicht** (`feat-board`) — `p-tabs`, ein Tab je angekreuzter Kategorie, in der etwas
    liegt, und dahinter _Sonstiges_ für die Meldungen ohne Zuordnung. Wer nichts angekreuzt hat,
    bekommt alle. Darüber der Knopf **Aktualisieren**; während eines Laufs an seiner Stelle der
    Fortschritt. Die Gruppierung samt dem Eimer _Sonstiges_ sitzt in `model/` und wird dort
    frameworkfrei geprüft.
 
-9. **`NewsRunStore`** — startet den Lauf, fragt alle zwei Sekunden nach und lädt die Artikel nach,
-   solange sich der Zähler bewegt. NgRx Signals Store, wie `AuthStore` es vormacht.
+10. **`NewsRunStore`** — startet den Lauf, fragt alle zwei Sekunden nach und lädt die Artikel nach,
+    solange sich der Zähler bewegt. NgRx Signals Store, wie `AuthStore` es vormacht.
 
-10. **Artikelkarte** (`ui/`) — Titel als Link, Quelle, Zeitpunkt. Die positive Kernaussage und das
+11. **Artikelkarte** (`ui/`) — Titel als Link, Quelle, Zeitpunkt. Die positive Kernaussage und das
     Ranking kommen in Schritt 5 dazu; die Karte wird dafür erweitert, nicht ersetzt.
 
-11. **Startseite umhängen** — die Übersicht wird die Route `''`, `domains/playground` fliegt raus,
-    samt Testseite, Übersetzungsschlüsseln und e2e-Spec.
+12. **Startseite umhängen** — die Übersicht wird die Route `''` und löst die Weiterleitung auf
+    `/picks` ab, die Schritt 3 dort hinterlassen hat. Die Testseite ist schon in Schritt 3
+    geflogen. Jede e2e-Spec, deren Weg über die Wurzel läuft, mockt ab hier auch
+    `/api/news/articles`.
 
-12. **Tests** — Komponententest für die Übersicht, Modelltest für die Gruppierung, e2e mit einem
-    Lauf, der über zwei Abfragen von _läuft_ auf _fertig_ springt.
+13. **Tests** — Komponententest für die Übersicht, Modelltest für die Gruppierung samt dem Eimer
+    _Sonstiges_ und der Sortierung, e2e mit einem Lauf, der über zwei Abfragen von _läuft_ auf
+    _fertig_ springt.
 
 ### Fertig, wenn
 

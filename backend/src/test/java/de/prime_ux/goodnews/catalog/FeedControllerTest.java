@@ -128,6 +128,22 @@ class FeedControllerTest {
 				.andExpect(jsonPath("$.name").value("kicker.de"));
 	}
 
+	/**
+	 * The sources page marks a source whose last attempt failed, with the error as its tooltip.
+	 * Without that an admin would have to work out from an empty tab that something is wrong.
+	 */
+	@Test
+	@AsUser("anna")
+	void carriesHowTheLastFetchWent() throws Exception {
+		this.kicker.recordFailure("answered with status 500");
+		this.feedRepository.save(this.kicker);
+
+		mockMvc.perform(get("/api/feeds"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].lastError").value("answered with status 500"))
+				.andExpect(jsonPath("$[0].lastFetchedAt").exists());
+	}
+
 	@Test
 	@AsUser("anna")
 	void deletesAFeed() throws Exception {

@@ -22,8 +22,9 @@ test.describe('Categories', () => {
     // it comes back 401 and the interceptor sends the browser to the login.
     await page.route('**/api/auth/me', (route) => route.fulfill({ json: adminUser }));
     await page.route('**/api/company', (route) => route.fulfill({ json: { name: 'Musterfirma GmbH', hasLogo: false } }));
-    // The start page is the picks now, so any route that lands there asks for the categories.
+    // The start page is the board, which asks for the categories and the stories.
     await page.route('**/api/news/categories', (route) => route.fulfill({ json: [] }));
+    await page.route(/\/api\/news\/articles/, (route) => route.fulfill({ json: [] }));
   });
 
   test('opens from the sidebar and lists the categories in order', async ({ page }) => {
@@ -95,7 +96,7 @@ test.describe('Categories', () => {
 
     await page.goto('/categories');
 
-    await expect(page.getByRole('heading', { name: 'Meine Auswahl' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Übersicht' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Kategorien' })).toHaveCount(0);
   });
 });

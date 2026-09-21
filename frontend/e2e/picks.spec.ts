@@ -22,6 +22,8 @@ test.describe('My picks', () => {
     // it comes back 401 and the interceptor sends the browser to the login.
     await page.route('**/api/auth/me', (route) => route.fulfill({ json: user }));
     await page.route('**/api/company', (route) => route.fulfill({ json: { name: 'Musterfirma GmbH', hasLogo: false } }));
+    // Reaching the picks through the sidebar means passing the board, which asks for the stories.
+    await page.route(/\/api\/news\/articles/, (route) => route.fulfill({ json: [] }));
   });
 
   test('opens from the sidebar and shows what was ticked before', async ({ page }) => {
@@ -73,15 +75,13 @@ test.describe('My picks', () => {
   });
 
   test('asks before leaving with unsaved ticks', async ({ page }) => {
-    // Signed in as an admin here, only for the sake of having somewhere to go: the picks are the
-    // one page a regular user can reach from the sidebar now.
-    await page.route('**/api/auth/me', (route) => route.fulfill({ json: { ...user, role: 'admin' } }));
     await page.route('**/api/news/categories', (route) => route.fulfill({ json: categories }));
+    await page.route(/\/api\/news\/articles/, (route) => route.fulfill({ json: [] }));
 
     await page.goto('/picks');
     await page.getByRole('checkbox', { name: 'Politik', exact: true }).check();
     await expect(page.getByText('Nicht gespeichert')).toBeVisible();
-    await page.getByRole('link', { name: 'Kategorien' }).click();
+    await page.getByRole('link', { name: 'Übersicht' }).click();
 
     await expect(page.getByText('Die Auswahl ist nicht gespeichert.', { exact: false })).toBeVisible();
     await page.getByRole('button', { name: 'Hierbleiben' }).click();

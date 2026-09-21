@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <title>Beispiel Nachrichten</title>
+    <meta property="og:site_name" content="Beispiel Nachrichten" />
+  </head>
+  <body>
+    <nav>
+      <!-- Too short to be a headline: navigation, not an article. -->
+      <a href="https://beispiel.example/sport/">Sport</a>
+      <a href="https://beispiel.example/politik/">Politik</a>
+    </nav>
+    <main>
+      <!-- The lead story, linked twice: once from the picture, once from the headline. -->
+      <a href="https://beispiel.example/politik/haushalt-beschlossen"
+        ><img src="/bilder/haushalt.jpg" alt="Der Haushalt wurde nach langer Debatte beschlossen" /></a>
+      <a href="https://beispiel.example/politik/haushalt-beschlossen">Der Haushalt wurde nach langer Debatte beschlossen</a>
+
+      <a href="/sport/aufstieg-in-letzter-minute">Aufstieg in letzter Minute nach einem Tor in der Nachspielzeit</a>
+
+      <!-- Deep enough and long enough, but on somebody else's site. -->
+      <a href="https://anderer.example/politik/fremde-meldung">Eine Meldung, die einem ganz anderen Haus gehört</a>
+
+      <!-- Long enough, but only one path segment: a section, not a story. -->
+      <a href="https://beispiel.example/wirtschaft">Alles aus der Wirtschaft, den ganzen Tag über</a>
+
+      <!-- Deep and long, but it answers 404 when asked. -->
+      <a href="https://beispiel.example/archiv/verschwundene-meldung">Eine Meldung, die es nicht mehr gibt</a>
+
+      <!-- Deep and long, but carries no Open Graph title: a gallery, not an article. -->
+      <a href="https://beispiel.example/bilder/woche-in-bildern">Die Woche in Bildern, zusammengestellt von der Redaktion</a>
+    </main>
+  </body>
+</html>

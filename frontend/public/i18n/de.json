@@ -1,6 +1,7 @@
 {
   "shell": {
     "workspace": "Nachrichten",
+    "board": "Übersicht",
     "administration": "Administration",
     "users": "Benutzer",
     "company": "Firma",
@@ -21,6 +22,22 @@
     "picks": "Meine Auswahl",
     "categories": "Kategorien",
     "feeds": "Quellen"
+  },
+  "board": {
+    "title": "Übersicht",
+    "intro": "Die Meldungen aus allen Quellen des Mandanten, ein Tab je Kategorie.",
+    "refresh": "Aktualisieren",
+    "running": "Die Quellen werden geholt …",
+    "threshold": "Ab Ranking",
+    "thresholdOption": "ab {{ranking}}",
+    "unplaced": "Sonstiges",
+    "unplacedHint": "Meldungen ohne Kategorie: noch nicht bewertet, oder die KI konnte sie nicht einordnen.",
+    "notRated": "noch nicht bewertet",
+    "rankingLabel": "Ranking {{ranking}} von 10",
+    "empty": "Noch keine Meldungen. Drücken Sie Aktualisieren, um die Quellen zu holen.",
+    "startError": "Der Lauf konnte nicht gestartet werden.",
+    "runFailed": "Der letzte Lauf ist gescheitert: {{error}}",
+    "loadError": "Die Meldungen konnten nicht geladen werden. Läuft das Backend?"
   },
   "categories": {
     "title": "Kategorien",

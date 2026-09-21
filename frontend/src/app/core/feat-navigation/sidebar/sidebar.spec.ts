@@ -10,6 +10,7 @@ import { Sidebar } from './sidebar';
 const translations = {
   shell: {
     workspace: 'News',
+    board: 'Board',
     picks: 'My picks',
     administration: 'Administration',
     users: 'Users',
@@ -101,7 +102,16 @@ describe('Sidebar', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent;
     expect(text).toContain('good news ai');
     expect(text).toContain('News');
+    expect(text).toContain('Board');
     expect(text).toContain('My picks');
+  });
+
+  it('links the board to the start page', () => {
+    const fixture = TestBed.createComponent(Sidebar);
+    fixture.detectChanges();
+
+    const startLink = (fixture.nativeElement as HTMLElement).querySelector('a[href="/"]');
+    expect(startLink?.textContent).toContain('Board');
   });
 
   it('signs out through the store and leaves for the login page', async () => {
