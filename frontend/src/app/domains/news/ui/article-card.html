@@ -1,9 +1,9 @@
 <ng-container *transloco="let t">
   <article class="flex flex-col gap-2 rounded-lg border border-surface-200 p-4 dark:border-surface-700">
     <div class="flex flex-wrap items-start gap-2">
-      <h3 class="m-0 text-base font-semibold">
-        <a [href]="article().link" target="_blank" rel="noopener noreferrer" class="underline">{{ article().title }}</a>
-      </h3>
+      <!-- The gist is the heading once the AI has written one; until then the original title is
+           all there is, and it stands in rather than leaving the card without a head. -->
+      <h3 class="m-0 text-base font-semibold">{{ article().positiveSummary ?? article().title }}</h3>
       @if (article().ranking !== null) {
         <span
           class="ml-auto rounded-full bg-primary px-2 py-0.5 text-sm font-semibold text-primary-contrast"
@@ -15,8 +15,19 @@
       }
     </div>
 
-    @if (article().teaser) {
-      <p class="m-0 text-sm text-surface-600 dark:text-surface-300">{{ article().teaser }}</p>
+    @if (article().positiveSummary !== null) {
+      <!-- Below the gist, so the link to the original is never further than one line away: the
+           gist is ours, the title is what the source wrote, and the two should not be confused. -->
+      <p class="m-0 text-sm">
+        <a [href]="article().link" target="_blank" rel="noopener noreferrer" class="underline">{{ article().title }}</a>
+      </p>
+    } @else {
+      <p class="m-0 text-sm">
+        <a [href]="article().link" target="_blank" rel="noopener noreferrer" class="underline">{{ t('board.readOriginal') }}</a>
+      </p>
+      @if (article().teaser) {
+        <p class="m-0 text-sm text-surface-600 dark:text-surface-300">{{ article().teaser }}</p>
+      }
     }
 
     <p class="m-0 text-xs text-surface-500 dark:text-surface-400">

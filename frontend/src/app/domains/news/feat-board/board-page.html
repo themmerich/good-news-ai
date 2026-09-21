@@ -5,14 +5,18 @@
       <div class="flex flex-wrap items-center gap-2">
         <label for="board-threshold" class="text-sm text-surface-500 dark:text-surface-400">{{ t('board.threshold') }}</label>
         <!-- The browser own select: four values, keyboard-reachable, and nothing a widget would add. -->
+        <!-- Marked on the option rather than set on the select: the options are written by a
+             loop, and a value set before they exist has nothing to match and falls back to the
+             first one. -->
         <select
           id="board-threshold"
           class="rounded-lg border border-surface-300 bg-transparent p-2 dark:border-surface-600"
-          [value]="articlesService.minRanking()"
           (change)="onThresholdChange($event)"
         >
           @for (threshold of thresholds; track threshold) {
-            <option [value]="threshold">{{ t('board.thresholdOption', { ranking: threshold }) }}</option>
+            <option [value]="threshold" [selected]="threshold === articlesService.minRanking()">
+              {{ t('board.thresholdOption', { ranking: threshold }) }}
+            </option>
           }
         </select>
         <p-button
