@@ -6,7 +6,7 @@ This document contains a general style guide for Angular projects.
 
 It can be used by human developers as well as AI agents.
 
-This guide targets **Angular v22+**, **TypeScript 6**, **Node 26**, a **zoneless** app, and **Vitest + Playwright** for tests.
+This guide targets **Angular v22+**, **TypeScript 6**, **Node 24**, a **zoneless** app, and **Vitest + Playwright** for tests.
 
 There are specific style guides for:
 

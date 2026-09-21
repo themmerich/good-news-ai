@@ -24,7 +24,7 @@ Before including a third-party package:
 - check for better alternatives
 - check package size and impact on bundle (e.g., using Bundlephobia)
 - prefer Angular packages that support modern features (Standalone components, Zoneless)
-- verify compatibility with the project's Angular major (v22), TypeScript 6, and Node 26 (check `peerDependencies` / `engines`)
+- verify compatibility with the project's Angular major (v22), TypeScript 6, and Node 24 (check `peerDependencies` / `engines`)
 - prefer packages published with provenance, keep the lockfile committed, and be wary of unvetted `postinstall` scripts
 
 ## Don't

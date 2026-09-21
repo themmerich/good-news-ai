@@ -17,7 +17,7 @@ empty PrimeNG test page where the first real feature will go.
 
 ## Prerequisites
 
-- **Node.js 26+** with **Corepack enabled** (`corepack enable`) — pinned in [`.nvmrc`](.nvmrc);
+- **Node.js 24.15+** with **Corepack enabled** (`corepack enable`) — pinned in [`.nvmrc`](.nvmrc);
   pnpm is pinned via `packageManager` in [`frontend/package.json`](frontend/package.json)
 - **Java 25** (the Gradle wrapper handles Gradle itself)
 - **Docker** — provides PostgreSQL via [`backend/compose.yaml`](backend/compose.yaml) in dev and
