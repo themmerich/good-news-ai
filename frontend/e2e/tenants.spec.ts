@@ -135,7 +135,7 @@ test.describe('Tenants', () => {
     await expect(page).toHaveURL(/localhost:4200\/$/);
     expect(opened).toEqual({ slug: 'musterfirma' });
     const navigation = page.getByRole('navigation');
-    await expect(navigation.getByText('Vorgänge')).toBeVisible();
+    await expect(navigation.getByText('Nachrichten')).toBeVisible();
     await expect(navigation.getByText('Administration')).toBeVisible();
     await expect(navigation.getByText('Mandant schließen')).toBeVisible();
   });

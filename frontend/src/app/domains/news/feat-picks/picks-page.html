@@ -1,0 +1,76 @@
+<ng-container *transloco="let t">
+  <main class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <h1 class="text-2xl font-semibold">{{ t('picks.title') }}</h1>
+      <div class="flex items-center gap-2">
+        @if (hasUnsavedChanges()) {
+          <span class="text-sm text-surface-500 dark:text-surface-400">{{ t('picks.unsaved') }}</span>
+          <p-button type="button" severity="secondary" [outlined]="true" [label]="t('picks.reset')" (onClick)="onReset()" />
+        }
+        <p-button
+          type="button"
+          icon="pi pi-check"
+          [label]="t('picks.save')"
+          [loading]="isSaving()"
+          [disabled]="!hasUnsavedChanges()"
+          (onClick)="onSave()"
+        />
+      </div>
+    </div>
+    <p class="text-surface-500 dark:text-surface-400">{{ t('picks.intro') }} {{ t('picks.chosen', { count: pickedCount() }) }}</p>
+
+    <!-- value() throws while the resource is in the error state, so the list only renders in the else branch. -->
+    @if (catalogService.catalog.error()) {
+      <p class="text-red-600 dark:text-red-400">{{ t('picks.loadError') }}</p>
+    } @else if (groups().length === 0) {
+      <p-message severity="info" variant="simple">{{ t('picks.empty') }}</p-message>
+    } @else {
+      <ul class="m-0 flex list-none flex-col gap-4 p-0">
+        @for (group of groups(); track group.id) {
+          <li class="flex flex-col gap-2">
+            @if (group.heading !== null) {
+              <h2 class="text-lg font-semibold">{{ group.heading }}</h2>
+            }
+            <ul class="m-0 flex list-none flex-col gap-2 p-0" [class.ml-4]="group.heading !== null">
+              @for (category of group.categories; track category.id) {
+                <li class="rounded-lg border border-surface-200 p-3 dark:border-surface-700" [attr.data-category]="category.name">
+                  <label class="flex cursor-pointer items-center gap-2 font-medium">
+                    <input
+                      type="checkbox"
+                      class="size-4 accent-primary"
+                      [checked]="isCategoryFullyPicked(category)"
+                      [indeterminate]="isCategoryPartlyPicked(category)"
+                      [disabled]="category.feeds.length === 0"
+                      (change)="onToggleCategory(category)"
+                    />
+                    <span>{{ category.name }}</span>
+                  </label>
+                  @if (category.feeds.length === 0) {
+                    <p class="mt-2 ml-6 text-sm text-surface-500 dark:text-surface-400">{{ t('picks.noFeeds') }}</p>
+                  } @else {
+                    <ul class="m-0 mt-2 ml-6 flex list-none flex-col gap-1 p-0">
+                      @for (feed of category.feeds; track feed.id) {
+                        <li>
+                          <label class="flex cursor-pointer flex-wrap items-center gap-2">
+                            <input
+                              type="checkbox"
+                              class="size-4 accent-primary"
+                              [checked]="isPicked(feed.id)"
+                              (change)="onToggleFeed(feed.id)"
+                            />
+                            <span>{{ feed.name }}</span>
+                            <span class="text-xs break-all text-surface-500 dark:text-surface-400">{{ feed.url }}</span>
+                          </label>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </li>
+              }
+            </ul>
+          </li>
+        }
+      </ul>
+    }
+  </main>
+</ng-container>
