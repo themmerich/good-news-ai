@@ -9,11 +9,14 @@ import { Sidebar } from './sidebar';
 
 const translations = {
   shell: {
-    workspace: 'Workspace',
+    workspace: 'News',
     testPage: 'Test page',
+    picks: 'My picks',
     administration: 'Administration',
     users: 'Users',
     company: 'Company',
+    categories: 'Categories',
+    feeds: 'Sources',
     aiSettings: 'AI access',
     profile: 'Profile',
     signOut: 'Sign out',
@@ -98,7 +101,7 @@ describe('Sidebar', () => {
 
     const text = (fixture.nativeElement as HTMLElement).textContent;
     expect(text).toContain('good news ai');
-    expect(text).toContain('Workspace');
+    expect(text).toContain('News');
     expect(text).toContain('Test page');
   });
 
@@ -196,6 +199,8 @@ describe('Sidebar', () => {
     expect(adminElement.querySelector('a[href="/users"]')?.textContent).toContain('Users');
     expect(adminElement.querySelector('a[href="/company"]')?.textContent).toContain('Company');
     expect(adminElement.querySelector('a[href="/ai-settings"]')?.textContent).toContain('AI access');
+    expect(adminElement.querySelector('a[href="/categories"]')?.textContent).toContain('Categories');
+    expect(adminElement.querySelector('a[href="/feeds"]')?.textContent).toContain('Sources');
 
     currentUser.set({
       username: 'user',
@@ -210,6 +215,9 @@ describe('Sidebar', () => {
     expect(userElement.textContent).not.toContain('Administration');
     expect(userElement.querySelector('a[href="/users"]')).toBeNull();
     expect(userElement.querySelector('a[href="/ai-settings"]')).toBeNull();
+    expect(userElement.querySelector('a[href="/categories"]')).toBeNull();
+    // The picking page is everyone's, unlike the catalog behind it.
+    expect(userElement.querySelector('a[href="/picks"]')).not.toBeNull();
   });
 
   it('shows a super-user without a tenant the tenants group and nothing of any tenant', () => {
@@ -220,7 +228,7 @@ describe('Sidebar', () => {
 
     expect(element.textContent).toContain('Tenants');
     expect(element.querySelector('a[href="/tenants"]')?.textContent).toContain('Overview');
-    expect(element.textContent).not.toContain('Workspace');
+    expect(element.textContent).not.toContain('News');
     expect(element.textContent).not.toContain('Administration');
     expect(element.textContent).not.toContain('Close tenant');
   });
@@ -233,7 +241,7 @@ describe('Sidebar', () => {
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
 
-    expect(element.textContent).toContain('Workspace');
+    expect(element.textContent).toContain('News');
     expect(element.textContent).toContain('Administration');
     expect(element.textContent).toContain('Tenants');
 

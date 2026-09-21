@@ -111,7 +111,7 @@ test.describe('Login', () => {
     // Nothing of any tenant in the sidebar, only the tenants group.
     const navigation = page.getByRole('navigation');
     await expect(navigation.getByText('Mandanten')).toBeVisible();
-    await expect(navigation.getByText('Vorgänge')).toHaveCount(0);
+    await expect(navigation.getByText('Nachrichten')).toHaveCount(0);
     await expect(navigation.getByText('Administration')).toHaveCount(0);
   });
 });

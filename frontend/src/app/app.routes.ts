@@ -40,6 +40,21 @@ export const routes: Routes = [
         loadChildren: () => import('./domains/admin/api/users-routes').then((m) => m.usersRoutes),
       },
       {
+        path: 'categories',
+        canActivate: [adminGuard],
+        loadChildren: () => import('./domains/news/api/categories-routes').then((m) => m.categoriesRoutes),
+      },
+      {
+        path: 'feeds',
+        canActivate: [adminGuard],
+        loadChildren: () => import('./domains/news/api/feeds-routes').then((m) => m.feedsRoutes),
+      },
+      {
+        path: 'picks',
+        canActivate: [tenantGuard],
+        loadChildren: () => import('./domains/news/api/picks-routes').then((m) => m.picksRoutes),
+      },
+      {
         path: 'company',
         canActivate: [adminGuard],
         loadChildren: () => import('./domains/admin/api/company-routes').then((m) => m.companyRoutes),

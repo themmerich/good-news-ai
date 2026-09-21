@@ -39,6 +39,10 @@ class SecurityConfig {
 				.requestMatchers("/api/tenants/**").hasRole("SUPERUSER")
 				.requestMatchers("/api/settings/**").hasAnyRole("ADMIN", "SUPERUSER")
 				.requestMatchers("/api/users/**").hasAnyRole("ADMIN", "SUPERUSER")
+				// The catalog is the admins' to curate. What a user picked from it, and the news
+				// that come out of it, are open to everyone with a tenant.
+				.requestMatchers("/api/categories/**").hasAnyRole("ADMIN", "SUPERUSER")
+				.requestMatchers("/api/feeds/**").hasAnyRole("ADMIN", "SUPERUSER")
 				// Everyone reads the company (the sidebar shows name and logo);
 				// only admins change it.
 				.requestMatchers(HttpMethod.PUT, "/api/company/**").hasAnyRole("ADMIN", "SUPERUSER")

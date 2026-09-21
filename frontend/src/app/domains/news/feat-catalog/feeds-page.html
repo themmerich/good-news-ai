@@ -1,0 +1,123 @@
+<ng-container *transloco="let t">
+  <main class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <h1 class="text-2xl font-semibold">{{ t('feeds.title') }}</h1>
+      <p-button icon="pi pi-plus" [label]="t('feeds.create')" [disabled]="categoryOptions().length === 0" (onClick)="onCreate()" />
+    </div>
+    <p class="text-surface-500 dark:text-surface-400">{{ t('feeds.intro') }}</p>
+
+    @if (categoryOptions().length === 0 && !categoriesService.categories.isLoading()) {
+      <!-- A feed needs a category to hang on, so the way out is named rather than left to guesswork. -->
+      <p-message severity="info" variant="simple">{{ t('feeds.noCategories') }}</p-message>
+    }
+
+    <!-- value() throws while the resource is in the error state, so the table only renders in the else branch. -->
+    @if (feedsService.feeds.error()) {
+      <p class="text-red-600 dark:text-red-400">{{ t('feeds.loadError') }}</p>
+    } @else {
+      <p-table [value]="feedsService.feeds.value()" dataKey="id" [loading]="feedsService.feeds.isLoading()">
+        <ng-template #header>
+          <tr>
+            <th scope="col">{{ t('feeds.name') }}</th>
+            <th scope="col">{{ t('feeds.category') }}</th>
+            <th scope="col">{{ t('feeds.url') }}</th>
+            <th scope="col">{{ t('feeds.actions') }}</th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-row>
+          <tr>
+            <td class="font-medium">{{ row.name }}</td>
+            <td>{{ row.categoryName }}</td>
+            <td>
+              <a [href]="row.url" target="_blank" rel="noopener noreferrer" class="break-all underline">{{ row.url }}</a>
+            </td>
+            <td>
+              <div class="flex gap-1">
+                <p-button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  [text]="true"
+                  [ariaLabel]="t('feeds.edit', { name: row.name })"
+                  [pTooltip]="t('feeds.edit', { name: row.name })"
+                  tooltipPosition="bottom"
+                  (onClick)="onEdit(row)"
+                />
+                <p-button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  [text]="true"
+                  [ariaLabel]="t('feeds.deleteNamed', { name: row.name })"
+                  [pTooltip]="t('feeds.deleteNamed', { name: row.name })"
+                  tooltipPosition="bottom"
+                  (onClick)="onDelete(row)"
+                />
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="4" class="text-center text-surface-500 dark:text-surface-400">{{ t('feeds.empty') }}</td>
+          </tr>
+        </ng-template>
+      </p-table>
+    }
+
+    <p-dialog
+      [header]="t(editingId() === null ? 'feeds.createTitle' : 'feeds.editTitle')"
+      [modal]="true"
+      [(visible)]="isDialogVisible"
+      [style]="{ width: '32rem' }"
+    >
+      <form novalidate class="flex flex-col gap-4 pt-2" (submit)="onSave($event)">
+        <div class="flex flex-col gap-2">
+          <p-floatlabel variant="on">
+            <input pInputText id="feed-name" type="text" autocomplete="off" [formField]="feedForm.name" />
+            <label for="feed-name">{{ t('feeds.name') }}</label>
+          </p-floatlabel>
+          @if (feedForm.name().invalid()) {
+            <p-message severity="error" variant="simple" size="small">{{ t('feeds.nameRequired') }}</p-message>
+          }
+        </div>
+        <div class="flex flex-col gap-2">
+          <p-floatlabel variant="on">
+            <input pInputText id="feed-url" type="url" autocomplete="off" [formField]="feedForm.url" (input)="onUrlInput()" />
+            <label for="feed-url">{{ t('feeds.url') }}</label>
+          </p-floatlabel>
+          @if (isUrlTaken()) {
+            <p-message severity="error" variant="simple" size="small">{{ t('feeds.urlTaken') }}</p-message>
+          } @else if (feedForm.url().invalid()) {
+            <p-message severity="error" variant="simple" size="small">{{ t('feeds.urlInvalid') }}</p-message>
+          } @else {
+            <p class="text-sm text-surface-500 dark:text-surface-400">{{ t('feeds.urlHint') }}</p>
+          }
+        </div>
+        <div class="flex flex-col gap-2">
+          <p-floatlabel variant="on">
+            <p-select
+              inputId="feed-category"
+              [options]="categoryOptions()"
+              optionLabel="label"
+              optionValue="value"
+              [formField]="feedForm.categoryId"
+            />
+            <label for="feed-category">{{ t('feeds.category') }}</label>
+          </p-floatlabel>
+          @if (feedForm.categoryId().invalid()) {
+            <p-message severity="error" variant="simple" size="small">{{ t('feeds.categoryRequired') }}</p-message>
+          }
+        </div>
+        <div class="flex justify-end gap-2">
+          <p-button
+            type="button"
+            severity="secondary"
+            [outlined]="true"
+            [label]="t('feeds.cancel')"
+            (onClick)="isDialogVisible.set(false)"
+          />
+          <p-button type="submit" icon="pi pi-check" [label]="t('feeds.save')" [loading]="isSaving()" [disabled]="feedForm().invalid()" />
+        </div>
+      </form>
+    </p-dialog>
+  </main>
+</ng-container>
