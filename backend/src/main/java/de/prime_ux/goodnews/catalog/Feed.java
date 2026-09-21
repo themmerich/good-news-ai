@@ -25,9 +25,7 @@ import org.hibernate.annotations.UuidGenerator;
  * that story is read, not when the source is entered.
  *
  * <p>The URL is unique per tenant, so the same source is fetched once however many people read
- * it. The columns recording the last fetch exist in the schema already but are not mapped yet —
- * nothing fetches anything at this point, and a field that is always null only invites a column
- * in the table that is always empty.
+ * it.
  */
 @Entity
 @Table(name = "feeds")
@@ -54,6 +52,17 @@ public class Feed {
 	@Column(nullable = false)
 	private SourceType type;
 
+	/** When a run last got as far as reading this source, whether or not that went well. */
+	@Column(name = "last_fetched_at")
+	private Instant lastFetchedAt;
+
+	/**
+	 * What the last attempt failed on, in words meant for the admin who has to fix it. Empty
+	 * while all is well, so the sources page can mark a source simply by this being set.
+	 */
+	@Column(name = "last_error")
+	private String lastError;
+
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
@@ -69,5 +78,20 @@ public class Feed {
 		this.name = name;
 		this.url = url;
 		this.type = type;
+	}
+
+	/** A run got through. The previous error goes with it, or it would outlive its cause. */
+	public void recordFetch() {
+		this.lastFetchedAt = Instant.now();
+		this.lastError = null;
+	}
+
+	public void recordFailure(String error) {
+		this.lastFetchedAt = Instant.now();
+		this.lastError = error;
+	}
+
+	public boolean hasError() {
+		return this.lastError != null;
 	}
 }
