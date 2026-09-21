@@ -140,8 +140,12 @@ bestimmt, in welcher Reihenfolge die Tabs stehen. Der Name ist je Mandant eindeu
 auf Groß- und Kleinschreibung.
 
 Die Liste ist zugleich der Wortschatz, aus dem die KI wählt, und sollte deshalb überschaubar
-bleiben. Aus fünfzehn Begriffen mit klarer Bedeutung trifft ein Modell zuverlässig; aus fünfzig,
-die sich überschneiden, nicht mehr.
+bleiben. Aus fünfzehn Begriffen trifft ein Modell zuverlässig, aus fünfzig nicht mehr.
+
+Begriffe, die ineinanderliegen, sind dabei kein Problem: „Sport", „NFL" und „Miami Dolphins"
+dürfen nebeneinanderstehen, weil die KI die engste passende nimmt. Schlecht sind Begriffe, die
+sich kreuzen, ohne dass einer im anderen steckt — bei „Sport" und „USA" trifft eine
+Dolphins-Meldung beides, und keiner ist der engere.
 
 ### `feeds`
 
@@ -304,6 +308,22 @@ Die Kategorie kommt als Name zurück, nicht als Id. Eine UUID kostet Token und l
 Erfinden ein; ein Name lässt sich ohne Rücksicht auf Groß- und Kleinschreibung gegen die Liste
 abgleichen. Was nicht trifft, bleibt leer. Das Modell darf ausdrücklich nichts zuordnen, wenn
 nichts passt — eine erzwungene Zuordnung wäre schlechter als ein sichtbares _Sonstiges_.
+
+Gewählt wird die **engste** passende Kategorie. Stehen „Sport", „NFL" und „Miami Dolphins"
+nebeneinander in der Liste, gehört eine Dolphins-Meldung unter Miami Dolphins, eine über die
+Patriots unter NFL und ein Handballspiel unter Sport. Dass die Dolphins ein NFL-Team sind, weiß
+das Modell von sich aus; es braucht nur die Ansage, nach unten aufzulösen statt irgendetwas
+Zutreffendes zu nehmen. Eine Hierarchie im Datenmodell ist dafür nicht nötig.
+
+Eine Meldung liegt damit in genau einem Tab, auch wenn eine Oberkategorie ebenfalls zuträfe. Wer
+alle NFL-Nachrichten sehen will, kreuzt NFL und Miami Dolphins an. Das Hochrollen in die
+Oberkategorie wäre ein eigener Zug — es bräuchte den Elternbezug, den Schritt 3 aus den
+Kategorien entfernt hat — und ist bewusst nicht gemacht, solange sich nicht zeigt, dass es fehlt.
+
+Die Antwort kommt in mehreren Teilen zurück, und der erste ist nicht zwingend der mit den Worten
+darin: Modelle, die vor dem Antworten nachdenken, stellen ihre Überlegung voran, und dieser Teil
+trägt keinen Text. Wer nur den ersten Teil liest, findet eine leere Antwort, während das Modell
+sehr wohl etwas gesagt hat. Gelesen wird deshalb der Text aller Teile.
 
 Die Antwort wird als Struktur ausgelesen, nicht als Freitext — Spring AI bildet sie über
 `.entity(...)` auf einen Record ab. Kommen weniger Einträge zurück als hineingingen, oder passt
