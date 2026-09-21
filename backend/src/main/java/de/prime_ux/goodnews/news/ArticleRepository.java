@@ -20,4 +20,13 @@ public interface ArticleRepository extends JpaRepository<Article, UUID> {
 	List<Article> findAllOfTenant(UUID tenantId);
 
 	Optional<Article> findByFeedIdAndGuid(UUID feedId, String guid);
+
+	/**
+	 * What the AI still has to look at. The source comes along eagerly because the prompt names
+	 * it, and oldest first so a run that is cut short has worked through the backlog rather than
+	 * skimming the top of it repeatedly.
+	 */
+	@Query("select a from Article a join fetch a.feed f where f.tenant.id = :tenantId"
+			+ " and a.processedAt is null order by a.fetchedAt")
+	List<Article> findUnprocessedOfTenant(UUID tenantId);
 }

@@ -75,12 +75,12 @@ class NewsRunnerTest {
 
 		NewsRun run = awaitFinish(this.newsRunner.start(this.tenant));
 
-		assertThat(run.getStatus()).isEqualTo(RunStatus.DONE);
 		// Two out of the feed, two out of the page.
 		assertThat(this.articleRepository.findAllOfTenant(this.tenant.getId())).hasSize(4);
-		// Nothing has been rated, so everything still counts as waiting for the AI.
 		assertThat(run.getTotalArticles()).isEqualTo(4);
-		assertThat(run.getProcessedArticles()).isZero();
+		// Every bundle went to the AI, which in this context has no key and refuses; the fetching
+		// is what this asserts, and it got through.
+		assertThat(run.getProcessedArticles()).isEqualTo(4);
 	}
 
 	@Test
@@ -138,6 +138,25 @@ class NewsRunnerTest {
 		assertThat(fresh.getId()).isNotEqualTo(abandoned);
 		assertThat(this.runRepository.findById(abandoned).orElseThrow().getStatus()).isEqualTo(RunStatus.FAILED);
 		awaitFinish(fresh);
+	}
+
+	/**
+	 * Every bundle failing is what having no AI access looks like from here. The pass says so
+	 * rather than ending quietly as done, because a board full of unrated stories with no
+	 * explanation is the one failure nobody would think to look for.
+	 */
+	@Test
+	void failsWithAPointerToTheKeyWhenNothingCouldBeRated() {
+		feed("Beispiel Feed", FEED_URL);
+
+		NewsRun run = awaitFinish(this.newsRunner.start(this.tenant));
+
+		assertThat(run.getStatus()).isEqualTo(RunStatus.FAILED);
+		// What actually went wrong, not a guess at the cause.
+		assertThat(run.getError()).startsWith("no story could be rated");
+		// The stories are fetched all the same and sit there unrated.
+		assertThat(this.articleRepository.findAllOfTenant(this.tenant.getId())).hasSize(2);
+		assertThat(this.articleRepository.findUnprocessedOfTenant(this.tenant.getId())).hasSize(2);
 	}
 
 	@Test

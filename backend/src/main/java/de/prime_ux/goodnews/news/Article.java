@@ -89,4 +89,18 @@ public class Article {
 	public boolean isUnprocessed() {
 		return this.processedAt == null;
 	}
+
+	/**
+	 * What the AI made of the story, written in one go because that is how it arrives.
+	 *
+	 * <p>An empty category is a real answer: the model was shown the list and placed the story
+	 * nowhere. The story counts as processed regardless, so the next run does not pay for it
+	 * again — what it lacks is a category, not an opinion.
+	 */
+	public void rate(Category category, String positiveSummary, Integer ranking) {
+		this.category = category;
+		this.positiveSummary = positiveSummary;
+		this.ranking = ranking;
+		this.processedAt = Instant.now();
+	}
 }
