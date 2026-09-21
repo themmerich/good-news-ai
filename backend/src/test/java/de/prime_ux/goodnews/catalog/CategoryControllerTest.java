@@ -49,155 +49,98 @@ class CategoryControllerTest {
 
 	private Tenant tenant;
 	private Category sport;
-	private Category fussball;
-	private Category angular;
+	private Category politik;
 	private Category foreignCategory;
 
 	@BeforeEach
 	void cleanDatabaseAndCreateCategories() {
-		// Dependents first; other test classes share this context's database. The categories go
-		// in one statement rather than row by row: they point at each other, and a row-wise
-		// delete would have to hit the children before their parents.
+		// Dependents first; other test classes share this context's database.
 		feedRepository.deleteAll();
-		categoryRepository.deleteAllInBatch();
+		categoryRepository.deleteAll();
 		appUserRepository.deleteAll();
 		tenantRepository.deleteAll();
 		tenant = tenantRepository.save(new Tenant("Musterfirma GmbH", "musterfirma"));
 		Tenant otherTenant = tenantRepository.save(new Tenant("Beispiel AG", "beispiel-ag"));
-		sport = categoryRepository.save(new Category(tenant, null, "Sport", 0));
-		fussball = categoryRepository.save(new Category(tenant, sport, "Fußball", 0));
-		categoryRepository.save(new Category(tenant, sport, "Football", 1));
-		angular = categoryRepository.save(new Category(tenant, null, "Angular", 1));
+		sport = categoryRepository.save(new Category(tenant, "Sport", 0));
+		politik = categoryRepository.save(new Category(tenant, "Politik", 1));
+		categoryRepository.save(new Category(tenant, "Soziales", 2));
 		// Another tenant's category must never show up nor be reachable.
-		foreignCategory = categoryRepository.save(new Category(otherTenant, null, "Politik", 0));
+		foreignCategory = categoryRepository.save(new Category(otherTenant, "Wirtschaft", 0));
 		appUserRepository.save(new AppUser(tenant, "anna", "Anna", "Admin", "{noop}irrelevant", UserRole.ADMIN));
 		appUserRepository.save(new AppUser(tenant, "ben", "Ben", "Benutzer", "{noop}irrelevant", UserRole.USER));
 	}
 
 	@Test
 	@AsUser("anna")
-	void listsTheOwnTenantsTreeFlatWithTheParentOnEachNode() throws Exception {
+	void listsTheOwnTenantsCategoriesInOrder() throws Exception {
 		mockMvc.perform(get("/api/categories"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.length()").value(4))
-				.andExpect(jsonPath("$..name",
-						org.hamcrest.Matchers.containsInAnyOrder("Sport", "Fußball", "Football", "Angular")))
-				.andExpect(jsonPath("$[?(@.name == 'Fußball')].parentId",
-						org.hamcrest.Matchers.hasItem(sport.getId().toString())))
+				.andExpect(jsonPath("$.length()").value(3))
+				.andExpect(jsonPath("$..name", org.hamcrest.Matchers.contains("Sport", "Politik", "Soziales")))
 				// Nothing of the other tenant, whatever its name.
-				.andExpect(jsonPath("$[?(@.name == 'Politik')]").isEmpty());
+				.andExpect(jsonPath("$[?(@.name == 'Wirtschaft')]").isEmpty());
 	}
 
 	@Test
 	@AsUser("anna")
-	void countsTheFeedsOnEachCategory() throws Exception {
-		feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss", SourceType.FEED));
-
-		mockMvc.perform(get("/api/categories"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[?(@.name == 'Fußball')].feedCount",
-						org.hamcrest.Matchers.hasItem(1)))
-				// A top-level category carries no feeds of its own, whatever hangs below it.
-				.andExpect(jsonPath("$[?(@.name == 'Sport')].feedCount",
-						org.hamcrest.Matchers.hasItem(0)));
-	}
-
-	@Test
-	@AsUser("anna")
-	void createsACategoryAtTheEndOfItsSiblings() throws Exception {
+	void createsACategoryAtTheEndOfTheList() throws Exception {
 		mockMvc.perform(post("/api/categories").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"  Handball \", \"parentId\": \"" + sport.getId() + "\"}"))
+				.content("{\"name\": \"  Technik \"}"))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.name").value("Handball"))
-				.andExpect(jsonPath("$.parentId").value(sport.getId().toString()))
-				.andExpect(jsonPath("$.sortOrder").value(2));
+				.andExpect(jsonPath("$.name").value("Technik"))
+				.andExpect(jsonPath("$.sortOrder").value(3));
 	}
 
 	@Test
 	@AsUser("anna")
-	void refusesANameThatASiblingAlreadyHas() throws Exception {
+	void refusesANameTheTenantAlreadyHas() throws Exception {
 		mockMvc.perform(post("/api/categories").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				// Only the casing differs. Deliberately not "FUSSBALL": the sharp s turns into "ss"
-				// when upper-cased, which makes it a different name to lower() and would pass.
-				.content("{\"name\": \"fußball\", \"parentId\": \"" + sport.getId() + "\"}"))
+				// Only the casing differs. The name is unique per tenant now, where it used to be
+				// unique only among one parent's children.
+				.content("{\"name\": \"sPoRt\"}"))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.reason").value("name"));
 	}
 
 	@Test
 	@AsUser("anna")
-	void letsTheSameNameStandUnderADifferentParent() throws Exception {
+	void letsAnotherTenantKeepTheSameName() throws Exception {
 		mockMvc.perform(post("/api/categories").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"Fußball\", \"parentId\": \"" + angular.getId() + "\"}"))
+				.content("{\"name\": \"Wirtschaft\"}"))
 				.andExpect(status().isCreated());
 	}
 
 	@Test
 	@AsUser("anna")
-	void refusesAThirdLevel() throws Exception {
-		mockMvc.perform(post("/api/categories").with(csrf())
+	void movesACategoryIntoAPositionAndRenumbersTheRest() throws Exception {
+		mockMvc.perform(put("/api/categories/" + politik.getId()).with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"Bundesliga\", \"parentId\": \"" + fussball.getId() + "\"}"))
-				.andExpect(status().isBadRequest());
-	}
-
-	@Test
-	@AsUser("anna")
-	void movesACategoryIntoAPositionAndRenumbersItsSiblings() throws Exception {
-		// Football stands second under Sport; dragged to the front it becomes the zeroth.
-		Category football = categoryRepository
-				.findAllByTenantIdAndParentIdOrderBySortOrderAscNameAsc(tenant.getId(), sport.getId()).getLast();
-
-		mockMvc.perform(put("/api/categories/" + football.getId()).with(csrf())
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"Football\", \"parentId\": \"" + sport.getId() + "\", \"sortOrder\": 0}"))
+				.content("{\"name\": \"Politik\", \"sortOrder\": 0}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.sortOrder").value(0));
 
-		List<Category> children = categoryRepository
-				.findAllByTenantIdAndParentIdOrderBySortOrderAscNameAsc(tenant.getId(), sport.getId());
-		assertThat(children.stream().map(Category::getName)).containsExactly("Football", "Fußball");
-		assertThat(children.stream().map(Category::getSortOrder)).containsExactly(0, 1);
+		List<Category> categories = categoryRepository.findAllByTenantIdOrderBySortOrderAscNameAsc(tenant.getId());
+		assertThat(categories.stream().map(Category::getName)).containsExactly("Politik", "Sport", "Soziales");
+		assertThat(categories.stream().map(Category::getSortOrder)).containsExactly(0, 1, 2);
 	}
 
+	/**
+	 * Deleting used to answer 409 while feeds hung on the category. Feeds no longer carry one, and
+	 * the articles that do lose their column rather than the row, so nothing stands in the way.
+	 */
 	@Test
 	@AsUser("anna")
-	void movesACategoryToTheTopLevel() throws Exception {
-		mockMvc.perform(put("/api/categories/" + fussball.getId()).with(csrf())
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"Fußball\"}"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.parentId").doesNotExist());
+	void deletesACategoryEvenWhileSourcesExist() throws Exception {
+		feedRepository.save(new Feed(tenant, "kicker", "https://kicker.example/rss", SourceType.FEED));
 
-		assertThat(categoryRepository.findById(fussball.getId()).orElseThrow().isTopLevel()).isTrue();
-	}
-
-	@Test
-	@AsUser("anna")
-	void refusesToMoveACategoryThatHasChildrenUnderAnother() throws Exception {
-		mockMvc.perform(put("/api/categories/" + sport.getId()).with(csrf())
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"Sport\", \"parentId\": \"" + angular.getId() + "\"}"))
-				.andExpect(status().isBadRequest());
-	}
-
-	@Test
-	@AsUser("anna")
-	void deletesAnEmptyCategoryAndRefusesOneWithFeeds() throws Exception {
-		feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss", SourceType.FEED));
-
-		// The feed hangs on Fußball, which hangs on Sport: deleting either would take it along.
-		mockMvc.perform(delete("/api/categories/" + fussball.getId()).with(csrf()))
-				.andExpect(status().isConflict());
 		mockMvc.perform(delete("/api/categories/" + sport.getId()).with(csrf()))
-				.andExpect(status().isConflict());
-
-		mockMvc.perform(delete("/api/categories/" + angular.getId()).with(csrf()))
 				.andExpect(status().isNoContent());
-		assertThat(categoryRepository.findById(angular.getId())).isEmpty();
+
+		assertThat(categoryRepository.findById(sport.getId())).isEmpty();
+		assertThat(feedRepository.count()).isOne();
 	}
 
 	@Test

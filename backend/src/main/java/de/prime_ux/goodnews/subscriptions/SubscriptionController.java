@@ -3,14 +3,9 @@ package de.prime_ux.goodnews.subscriptions;
 import de.prime_ux.goodnews.auth.CurrentSession;
 import de.prime_ux.goodnews.catalog.Category;
 import de.prime_ux.goodnews.catalog.CategoryRepository;
-import de.prime_ux.goodnews.catalog.Feed;
-import de.prime_ux.goodnews.catalog.FeedRepository;
 import de.prime_ux.goodnews.users.AppUser;
 import jakarta.validation.Valid;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -23,8 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * What a user picked from their tenant's catalog. Open to every signed-in user with a tenant —
- * unlike the catalog's own endpoints, which belong to the admins.
+ * Which of their tenant's categories a user wants to see. Open to every signed-in user with a
+ * tenant — unlike the catalog's own endpoints, which belong to the admins.
+ *
+ * <p>The choice orders the board and nothing else. Every source of the tenant is fetched and
+ * rated either way, because a story's category is only known once it has been rated.
  */
 @RestController
 @RequestMapping("/api/news")
@@ -32,60 +30,45 @@ class SubscriptionController {
 
 	private final CurrentSession currentSession;
 	private final CategoryRepository categoryRepository;
-	private final FeedRepository feedRepository;
-	private final UserFeedRepository userFeedRepository;
+	private final UserCategoryRepository userCategoryRepository;
 
 	SubscriptionController(CurrentSession currentSession, CategoryRepository categoryRepository,
-			FeedRepository feedRepository, UserFeedRepository userFeedRepository) {
+			UserCategoryRepository userCategoryRepository) {
 		this.currentSession = currentSession;
 		this.categoryRepository = categoryRepository;
-		this.feedRepository = feedRepository;
-		this.userFeedRepository = userFeedRepository;
+		this.userCategoryRepository = userCategoryRepository;
 	}
 
-	@GetMapping("/catalog")
+	@GetMapping("/categories")
 	@Transactional(readOnly = true)
-	List<CatalogResponse> getCatalog() {
-		UUID tenantId = currentSession.tenant().getId();
-		Set<UUID> picked = Set.copyOf(userFeedRepository.findFeedIdsByUserId(currentSession.user().getId()));
-		Map<UUID, List<CatalogResponse.Feed>> feedsByCategory = new LinkedHashMap<>();
-		for (Feed feed : feedRepository.findAllOfTenant(tenantId)) {
-			feedsByCategory.computeIfAbsent(feed.getCategory().getId(), key -> new ArrayList<>())
-					.add(new CatalogResponse.Feed(feed.getId(), feed.getName(), feed.getUrl(),
-							picked.contains(feed.getId())));
-		}
-		return categoryRepository.findAllByTenantIdOrderBySortOrderAscNameAsc(tenantId).stream()
-				.map(category -> toResponse(category, feedsByCategory))
+	List<PickedCategoryResponse> getCategories() {
+		Set<UUID> picked = Set.copyOf(userCategoryRepository.findCategoryIdsByUserId(currentSession.user().getId()));
+		return categoryRepository.findAllByTenantIdOrderBySortOrderAscNameAsc(currentSession.tenant().getId())
+				.stream()
+				.map(category -> new PickedCategoryResponse(category.getId(), category.getName(),
+						category.getSortOrder(), picked.contains(category.getId())))
 				.toList();
 	}
 
 	/**
-	 * Replaces the selection with what the body holds. Feeds of another tenant are broken input
-	 * rather than a silent no-op: nobody should be left believing they picked something that was
-	 * never theirs to pick.
+	 * Replaces the selection with what the body holds. Categories of another tenant are broken
+	 * input rather than a silent no-op: nobody should be left believing they ticked something that
+	 * was never theirs to tick.
 	 */
 	@PutMapping("/picks")
 	@Transactional
 	List<UUID> setPicks(@Valid @RequestBody PicksRequest request) {
 		AppUser user = currentSession.user();
 		UUID tenantId = currentSession.tenant().getId();
-		List<UUID> wanted = request.feedIds().stream().distinct().toList();
-		List<Feed> feeds = wanted.stream()
-				.map(feedId -> feedRepository.findByIdAndTenantId(feedId, tenantId)
-						.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown feed")))
+		List<Category> categories = request.categoryIds().stream().distinct()
+				.map(categoryId -> categoryRepository.findByIdAndTenantId(categoryId, tenantId)
+						.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown category")))
 				.toList();
 		// Cleared and written afresh rather than compared item by item: the selection is a handful
 		// of rows, and a diff would be more code with more ways to go wrong.
-		userFeedRepository.deleteAllByUserId(user.getId());
-		userFeedRepository.flush();
-		userFeedRepository.saveAll(feeds.stream().map(feed -> new UserFeed(user, feed)).toList());
-		return feeds.stream().map(Feed::getId).toList();
-	}
-
-	private static CatalogResponse toResponse(Category category,
-			Map<UUID, List<CatalogResponse.Feed>> feedsByCategory) {
-		UUID parentId = category.isTopLevel() ? null : category.getParent().getId();
-		return new CatalogResponse(category.getId(), parentId, category.getName(), category.getSortOrder(),
-				feedsByCategory.getOrDefault(category.getId(), List.of()));
+		userCategoryRepository.deleteAllByUserId(user.getId());
+		userCategoryRepository.flush();
+		userCategoryRepository.saveAll(categories.stream().map(category -> new UserCategory(user, category)).toList());
+		return categories.stream().map(Category::getId).toList();
 	}
 }

@@ -18,10 +18,13 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.UuidGenerator;
 
 /**
- * Where news come from: one source, hanging on one leaf category. Usually an RSS or Atom feed;
- * a plain web page where the site offers none.
+ * Where news come from: usually an RSS or Atom feed, a plain web page where the site offers none.
  *
- * <p>The URL is unique per tenant, so the same source is fetched once however many people picked
+ * <p>A source carries no category. It brings whatever its site publishes — politics, society and
+ * sport through the same address — and which subject a single story belongs to is settled when
+ * that story is read, not when the source is entered.
+ *
+ * <p>The URL is unique per tenant, so the same source is fetched once however many people read
  * it. The columns recording the last fetch exist in the schema already but are not mapped yet —
  * nothing fetches anything at this point, and a field that is always null only invites a column
  * in the table that is always empty.
@@ -40,10 +43,6 @@ public class Feed {
 	@JoinColumn(name = "tenant_id")
 	private Tenant tenant;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "category_id")
-	private Category category;
-
 	@Column(nullable = false)
 	private String name;
 
@@ -58,17 +57,15 @@ public class Feed {
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
-	public Feed(Tenant tenant, Category category, String name, String url, SourceType type) {
+	public Feed(Tenant tenant, String name, String url, SourceType type) {
 		this.tenant = tenant;
-		this.category = category;
 		this.name = name;
 		this.url = url;
 		this.type = type;
 		this.createdAt = Instant.now();
 	}
 
-	public void update(Category category, String name, String url, SourceType type) {
-		this.category = category;
+	public void update(String name, String url, SourceType type) {
 		this.name = name;
 		this.url = url;
 		this.type = type;

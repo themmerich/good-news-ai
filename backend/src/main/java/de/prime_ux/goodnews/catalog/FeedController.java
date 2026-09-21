@@ -24,8 +24,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * The catalog's feeds, for the tenant's admins — the role requirement is enforced in the
- * SecurityConfig. A feed hangs on a leaf category, because a leaf is what becomes a tab on the
- * board; hanging one on a category that has subcategories would leave it nowhere to appear.
+ * SecurityConfig. A feed carries no category: it brings several subjects through one address, and
+ * which one a story belongs to is decided per story.
  */
 @RestController
 @RequestMapping("/api/feeds")
@@ -33,15 +33,13 @@ class FeedController {
 
 	private final CurrentSession currentSession;
 	private final FeedRepository feedRepository;
-	private final CategoryRepository categoryRepository;
 	private final FeedFinder feedFinder;
 	private final FeedReader feedReader;
 
-	FeedController(CurrentSession currentSession, FeedRepository feedRepository,
-			CategoryRepository categoryRepository, FeedFinder feedFinder, FeedReader feedReader) {
+	FeedController(CurrentSession currentSession, FeedRepository feedRepository, FeedFinder feedFinder,
+			FeedReader feedReader) {
 		this.currentSession = currentSession;
 		this.feedRepository = feedRepository;
-		this.categoryRepository = categoryRepository;
 		this.feedFinder = feedFinder;
 		this.feedReader = feedReader;
 	}
@@ -73,14 +71,13 @@ class FeedController {
 	@Transactional
 	ResponseEntity<?> createFeed(@Valid @RequestBody FeedRequest request) {
 		UUID tenantId = currentSession.tenant().getId();
-		Category category = leafCategory(request.categoryId(), tenantId);
 		String url = request.trimmedUrl();
 		if (feedRepository.existsByTenantIdAndUrlIgnoreCase(tenantId, url)) {
 			return urlConflict();
 		}
 		requireReadable(url, request.type());
 		Feed feed = feedRepository
-				.save(new Feed(currentSession.tenant(), category, request.trimmedName(), url, request.type()));
+				.save(new Feed(currentSession.tenant(), request.trimmedName(), url, request.type()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(FeedResponse.from(feed));
 	}
 
@@ -90,7 +87,6 @@ class FeedController {
 	ResponseEntity<?> updateFeed(@PathVariable UUID id, @Valid @RequestBody FeedRequest request) {
 		UUID tenantId = currentSession.tenant().getId();
 		Feed feed = ownFeed(id);
-		Category category = leafCategory(request.categoryId(), tenantId);
 		String url = request.trimmedUrl();
 		boolean urlTaken = !url.equalsIgnoreCase(feed.getUrl())
 				&& feedRepository.existsByTenantIdAndUrlIgnoreCase(tenantId, url);
@@ -100,7 +96,7 @@ class FeedController {
 		if (urlOrTypeChanged(feed, url, request.type())) {
 			requireReadable(url, request.type());
 		}
-		feed.update(category, request.trimmedName(), url, request.type());
+		feed.update(request.trimmedName(), url, request.type());
 		return ResponseEntity.ok(FeedResponse.from(feedRepository.save(feed)));
 	}
 
@@ -131,16 +127,6 @@ class FeedController {
 
 	private static boolean urlOrTypeChanged(Feed feed, String url, SourceType type) {
 		return !url.equalsIgnoreCase(feed.getUrl()) || type != feed.getType();
-	}
-
-	private Category leafCategory(UUID categoryId, UUID tenantId) {
-		Category category = categoryRepository.findByIdAndTenantId(categoryId, tenantId)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown category"));
-		if (categoryRepository.existsByParentId(category.getId())) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"feeds hang on categories without subcategories");
-		}
-		return category;
 	}
 
 	private Feed ownFeed(UUID id) {
