@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import de.prime_ux.goodnews.TestcontainersConfiguration;
 import de.prime_ux.goodnews.auth.AsUser;
+import de.prime_ux.goodnews.reading.StubHttpFetcher;
 import de.prime_ux.goodnews.tenants.Tenant;
 import de.prime_ux.goodnews.tenants.TenantRepository;
 import de.prime_ux.goodnews.users.AppUser;
@@ -45,6 +46,9 @@ class FeedControllerTest {
 	@Autowired
 	private TenantRepository tenantRepository;
 
+	@Autowired
+	private StubHttpFetcher httpFetcher;
+
 	private Tenant tenant;
 	private Category sport;
 	private Category fussball;
@@ -53,6 +57,7 @@ class FeedControllerTest {
 
 	@BeforeEach
 	void cleanDatabaseAndCreateFeeds() {
+		httpFetcher.clear();
 		feedRepository.deleteAll();
 		categoryRepository.deleteAllInBatch();
 		appUserRepository.deleteAll();
@@ -61,10 +66,10 @@ class FeedControllerTest {
 		Tenant otherTenant = tenantRepository.save(new Tenant("Beispiel AG", "beispiel-ag"));
 		sport = categoryRepository.save(new Category(tenant, null, "Sport", 0));
 		fussball = categoryRepository.save(new Category(tenant, sport, "Fußball", 0));
-		kicker = feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss"));
+		kicker = feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss", SourceType.FEED));
 		Category foreignCategory = categoryRepository.save(new Category(otherTenant, null, "Politik", 0));
 		foreignFeed = feedRepository.save(new Feed(otherTenant, foreignCategory, "Tagesschau",
-				"https://tagesschau.example/rss"));
+				"https://tagesschau.example/rss", SourceType.FEED));
 		appUserRepository.save(new AppUser(tenant, "anna", "Anna", "Admin", "{noop}irrelevant", UserRole.ADMIN));
 		appUserRepository.save(new AppUser(tenant, "ben", "Ben", "Benutzer", "{noop}irrelevant", UserRole.USER));
 	}
@@ -83,10 +88,12 @@ class FeedControllerTest {
 	@Test
 	@AsUser("anna")
 	void createsAFeedAndTrimsWhatWasPasted() throws Exception {
+		httpFetcher.feed("https://sportschau.example/rss", "rss2.xml");
+
 		mockMvc.perform(post("/api/feeds").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"name\": \" Sportschau \", \"url\": \" https://sportschau.example/rss \","
-						+ " \"categoryId\": \"" + fussball.getId() + "\"}"))
+						+ " \"categoryId\": \"" + fussball.getId() + "\", \"type\": \"FEED\"}"))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.name").value("Sportschau"))
 				.andExpect(jsonPath("$.url").value("https://sportschau.example/rss"));
@@ -100,7 +107,7 @@ class FeedControllerTest {
 		mockMvc.perform(post("/api/feeds").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"name\": \"Nochmal kicker\", \"url\": \"HTTPS://KICKER.EXAMPLE/RSS\","
-						+ " \"categoryId\": \"" + fussball.getId() + "\"}"))
+						+ " \"categoryId\": \"" + fussball.getId() + "\", \"type\": \"FEED\"}"))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.reason").value("url"));
 	}
@@ -111,7 +118,7 @@ class FeedControllerTest {
 		mockMvc.perform(post("/api/feeds").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"name\": \"kicker\", \"url\": \"kicker.example\", \"categoryId\": \""
-						+ fussball.getId() + "\"}"))
+						+ fussball.getId() + "\", \"type\": \"FEED\"}"))
 				.andExpect(status().isBadRequest());
 	}
 
@@ -122,7 +129,7 @@ class FeedControllerTest {
 		mockMvc.perform(post("/api/feeds").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"name\": \"Sportschau\", \"url\": \"https://sportschau.example/rss\","
-						+ " \"categoryId\": \"" + sport.getId() + "\"}"))
+						+ " \"categoryId\": \"" + sport.getId() + "\", \"type\": \"FEED\"}"))
 				.andExpect(status().isBadRequest());
 	}
 
@@ -134,7 +141,7 @@ class FeedControllerTest {
 		mockMvc.perform(put("/api/feeds/" + kicker.getId()).with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"name\": \"kicker\", \"url\": \"https://kicker.example/rss\", \"categoryId\": \""
-						+ football.getId() + "\"}"))
+						+ football.getId() + "\", \"type\": \"FEED\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.categoryName").value("Football"));
 	}
@@ -154,10 +161,94 @@ class FeedControllerTest {
 		mockMvc.perform(put("/api/feeds/" + foreignFeed.getId()).with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"name\": \"Gekapert\", \"url\": \"https://gekapert.example/rss\", \"categoryId\": \""
-						+ fussball.getId() + "\"}"))
+						+ fussball.getId() + "\", \"type\": \"FEED\"}"))
 				.andExpect(status().isNotFound());
 		mockMvc.perform(delete("/api/feeds/" + foreignFeed.getId()).with(csrf()))
 				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	@AsUser("anna")
+	void answersASearchWithTheFeedsBehindAnAddress() throws Exception {
+		httpFetcher.html("https://beispiel.example/", "declares-feed.html");
+		httpFetcher.feed("https://beispiel.example/feed.rss", "rss2.xml");
+
+		mockMvc.perform(post("/api/feeds/probe").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"url\": \"  beispiel.example \"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.feeds.length()").value(1))
+				.andExpect(jsonPath("$.feeds[0].url").value("https://beispiel.example/feed.rss"))
+				.andExpect(jsonPath("$.feeds[0].title").value("Beispiel News"))
+				.andExpect(jsonPath("$.feeds[0].entryCount").value(2));
+	}
+
+	@Test
+	@AsUser("anna")
+	void answersASearchWithNothingWhereASiteHasNoFeed() throws Exception {
+		httpFetcher.html("https://ohne.example/", "silent-home.html");
+
+		// Not an error: the site simply has none, and the page then offers to read it directly.
+		mockMvc.perform(post("/api/feeds/probe").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"url\": \"https://ohne.example/\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.feeds.length()").value(0));
+	}
+
+	@Test
+	@AsUser("anna")
+	void refusesASearchForSomethingThatIsNoAddress() throws Exception {
+		mockMvc.perform(post("/api/feeds/probe").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"url\": \"kein komma url\"}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	@AsUser("ben")
+	void keepsTheSearchToTheAdmins() throws Exception {
+		mockMvc.perform(post("/api/feeds/probe").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"url\": \"https://beispiel.example/\"}"))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	@AsUser("anna")
+	void readsAFeedOnceBeforeStoringIt() throws Exception {
+		// Nothing answers at this address, so it is caught where it was typed rather than hours
+		// later in a run that quietly brought nothing back.
+		mockMvc.perform(post("/api/feeds").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Tot\", \"url\": \"https://tot.example/rss\", \"categoryId\": \""
+						+ fussball.getId() + "\", \"type\": \"FEED\"}"))
+				.andExpect(status().isBadRequest());
+
+		assertThat(feedRepository.findAllOfTenant(tenant.getId())).hasSize(1);
+	}
+
+	@Test
+	@AsUser("anna")
+	void takesAWebPageAsItComes() throws Exception {
+		// Whether articles can be pulled out of a page only shows when the reader tries, and that
+		// belongs to the run rather than to the form.
+		mockMvc.perform(post("/api/feeds").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"NFL\", \"url\": \"https://nfl.example/news/\", \"categoryId\": \""
+						+ fussball.getId() + "\", \"type\": \"PAGE\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.type").value("PAGE"));
+	}
+
+	@Test
+	@AsUser("anna")
+	void refusesABodyThatLeavesTheTypeOpen() throws Exception {
+		mockMvc.perform(post("/api/feeds").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"kicker\", \"url\": \"https://neu.example/rss\", \"categoryId\": \""
+						+ fussball.getId() + "\"}"))
+				.andExpect(status().isBadRequest());
 	}
 
 	@Test

@@ -1,6 +1,9 @@
 package de.prime_ux.goodnews.catalog;
 
 import de.prime_ux.goodnews.auth.CurrentSession;
+import de.prime_ux.goodnews.reading.FeedFinder;
+import de.prime_ux.goodnews.reading.FeedReader;
+import de.prime_ux.goodnews.reading.SourceReadException;
 import de.prime_ux.goodnews.tenants.ConflictResponse;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -31,12 +34,32 @@ class FeedController {
 	private final CurrentSession currentSession;
 	private final FeedRepository feedRepository;
 	private final CategoryRepository categoryRepository;
+	private final FeedFinder feedFinder;
+	private final FeedReader feedReader;
 
 	FeedController(CurrentSession currentSession, FeedRepository feedRepository,
-			CategoryRepository categoryRepository) {
+			CategoryRepository categoryRepository, FeedFinder feedFinder, FeedReader feedReader) {
 		this.currentSession = currentSession;
 		this.feedRepository = feedRepository;
 		this.categoryRepository = categoryRepository;
+		this.feedFinder = feedFinder;
+		this.feedReader = feedReader;
+	}
+
+	/**
+	 * What feeds there are behind an ordinary web address. Reaches out to the open internet, which
+	 * is why it is a POST rather than a GET: it is not free, and nothing about it should be cached.
+	 *
+	 * <p>An empty list is a perfectly good answer — the site has no feed, and the page then offers
+	 * to read the site itself.
+	 */
+	@PostMapping("/probe")
+	ProbeResponse probe(@Valid @RequestBody ProbeRequest request) {
+		try {
+			return new ProbeResponse(this.feedFinder.find(request.trimmedUrl()));
+		} catch (SourceReadException e) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+		}
 	}
 
 	@GetMapping
@@ -55,7 +78,9 @@ class FeedController {
 		if (feedRepository.existsByTenantIdAndUrlIgnoreCase(tenantId, url)) {
 			return urlConflict();
 		}
-		Feed feed = feedRepository.save(new Feed(currentSession.tenant(), category, request.trimmedName(), url));
+		requireReadable(url, request.type());
+		Feed feed = feedRepository
+				.save(new Feed(currentSession.tenant(), category, request.trimmedName(), url, request.type()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(FeedResponse.from(feed));
 	}
 
@@ -72,7 +97,10 @@ class FeedController {
 		if (urlTaken) {
 			return urlConflict();
 		}
-		feed.update(category, request.trimmedName(), url);
+		if (urlOrTypeChanged(feed, url, request.type())) {
+			requireReadable(url, request.type());
+		}
+		feed.update(category, request.trimmedName(), url, request.type());
 		return ResponseEntity.ok(FeedResponse.from(feedRepository.save(feed)));
 	}
 
@@ -82,6 +110,27 @@ class FeedController {
 	@Transactional
 	void deleteFeed(@PathVariable UUID id) {
 		feedRepository.delete(ownFeed(id));
+	}
+
+	/**
+	 * A feed is read once before it is stored, so a wrong address is caught where it was typed
+	 * rather than hours later in a run that quietly brought nothing back. A page is taken as it
+	 * comes: whether articles can be pulled out of it only shows when the reader tries, and that
+	 * belongs to the run, not to the form.
+	 */
+	private void requireReadable(String url, SourceType type) {
+		if (type != SourceType.FEED) {
+			return;
+		}
+		try {
+			this.feedReader.read(url);
+		} catch (SourceReadException e) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "no feed: " + e.getMessage());
+		}
+	}
+
+	private static boolean urlOrTypeChanged(Feed feed, String url, SourceType type) {
+		return !url.equalsIgnoreCase(feed.getUrl()) || type != feed.getType();
 	}
 
 	private Category leafCategory(UUID categoryId, UUID tenantId) {

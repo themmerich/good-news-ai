@@ -13,6 +13,7 @@ import de.prime_ux.goodnews.catalog.Category;
 import de.prime_ux.goodnews.catalog.CategoryRepository;
 import de.prime_ux.goodnews.catalog.Feed;
 import de.prime_ux.goodnews.catalog.FeedRepository;
+import de.prime_ux.goodnews.catalog.SourceType;
 import de.prime_ux.goodnews.tenants.Tenant;
 import de.prime_ux.goodnews.tenants.TenantRepository;
 import de.prime_ux.goodnews.users.AppUser;
@@ -67,12 +68,12 @@ class SubscriptionControllerTest {
 		Tenant otherTenant = tenantRepository.save(new Tenant("Beispiel AG", "beispiel-ag"));
 		Category sport = categoryRepository.save(new Category(tenant, null, "Sport", 0));
 		Category fussball = categoryRepository.save(new Category(tenant, sport, "Fußball", 0));
-		kicker = feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss"));
+		kicker = feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss", SourceType.FEED));
 		sportschau = feedRepository.save(new Feed(tenant, fussball, "Sportschau",
-				"https://sportschau.example/rss"));
+				"https://sportschau.example/rss", SourceType.FEED));
 		Category foreignCategory = categoryRepository.save(new Category(otherTenant, null, "Politik", 0));
 		foreignFeed = feedRepository.save(new Feed(otherTenant, foreignCategory, "Tagesschau",
-				"https://tagesschau.example/rss"));
+				"https://tagesschau.example/rss", SourceType.FEED));
 		appUserRepository.save(new AppUser(tenant, "ben", "Ben", "Benutzer", "{noop}irrelevant", UserRole.USER));
 		appUserRepository.save(new AppUser(tenant, "uwe", "Uwe", "User", "{noop}irrelevant", UserRole.USER));
 	}
