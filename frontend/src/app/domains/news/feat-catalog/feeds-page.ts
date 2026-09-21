@@ -10,12 +10,13 @@ import { InputTextModule } from 'primeng/inputtext';
 import { MessageModule } from 'primeng/message';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 
 import { CategoriesService } from '../data/categories-service';
 import { FeedsService } from '../data/feeds-service';
 import { buildTree, leaves } from '../model/category-tree';
-import { Feed, FeedInput } from '../model/category';
+import { Feed, FeedInput, FoundFeed, SourceType } from '../model/category';
 
 type FeedForm = { name: string; url: string; categoryId: string | null };
 
@@ -27,8 +28,12 @@ function isUrlConflict(error: unknown): boolean {
 }
 
 /**
- * The catalog's feeds. A feed hangs on a category without subcategories, because such a category
- * is what becomes a tab — so the dialog offers only those.
+ * The catalog's sources. A source hangs on a category without subcategories, because such a
+ * category is what becomes a tab; hanging one elsewhere would leave it nowhere to appear.
+ *
+ * <p>Adding one starts from an ordinary web address, not from a feed address: hardly anybody
+ * knows those by heart, and sites hide them. The server searches, and what it confirms is offered
+ * for picking. Where a site has no feed, the page itself becomes the source.
  */
 @Component({
   selector: 'app-feeds-page',
@@ -42,6 +47,7 @@ function isUrlConflict(error: unknown): boolean {
     MessageModule,
     SelectModule,
     TableModule,
+    TagModule,
     TooltipModule,
   ],
   templateUrl: './feeds-page.html',
@@ -53,7 +59,7 @@ export class FeedsPage {
   private readonly messageService = inject(MessageService);
   private readonly transloco = inject(TranslocoService);
 
-  /** Only categories without subcategories: the others have no tab to show a feed on. */
+  /** Only categories without subcategories: the others have no tab to show a source on. */
   protected readonly categoryOptions = computed(() =>
     leaves(buildTree(this.categoriesService.categories.value())).map((category) => ({
       label: category.name,
@@ -66,6 +72,20 @@ export class FeedsPage {
   protected readonly isSaving = signal(false);
   protected readonly isUrlTaken = signal(false);
   private readonly hasSubmitAttempted = signal(false);
+
+  /** What was typed into the search field, before any of it became a source. */
+  protected readonly searchUrl = signal('');
+  protected readonly isSearching = signal(false);
+  protected readonly searchFailed = signal(false);
+  /** Null while nothing was searched for yet; an empty array means the site has no feed. */
+  protected readonly foundFeeds = signal<FoundFeed[] | null>(null);
+  protected readonly type = signal<SourceType>('FEED');
+
+  protected readonly isEditing = computed(() => this.editingId() !== null);
+  /** The search turned up nothing, so the only way on is to read the page itself. */
+  protected readonly hasNoFeeds = computed(() => this.foundFeeds()?.length === 0);
+  /** Nothing to save before a source was picked or the page itself was taken. */
+  protected readonly hasSource = computed(() => this.model().url.trim().length > 0);
 
   private readonly whenEdited = ({ state }: ChildFieldContext<string>) => state.dirty() || this.hasSubmitAttempted();
 
@@ -85,6 +105,48 @@ export class FeedsPage {
     this.openDialog(feed);
   }
 
+  protected onSearchInput(event: Event): void {
+    this.searchUrl.set((event.target as HTMLInputElement).value);
+    // A new address makes the previous answer meaningless.
+    this.foundFeeds.set(null);
+    this.searchFailed.set(false);
+  }
+
+  protected async onSearch(): Promise<void> {
+    const url = this.searchUrl().trim();
+    if (url.length === 0) {
+      return;
+    }
+    this.isSearching.set(true);
+    this.searchFailed.set(false);
+    this.foundFeeds.set(null);
+    try {
+      this.foundFeeds.set(await this.feedsService.probe(url));
+    } catch {
+      this.searchFailed.set(true);
+    } finally {
+      this.isSearching.set(false);
+    }
+  }
+
+  /** Picking one fills the form with it; its title is a proposal and stays editable. */
+  protected onPickFeed(feed: FoundFeed): void {
+    this.type.set('FEED');
+    this.isUrlTaken.set(false);
+    this.model.update((current) => ({ ...current, name: feed.title.trim(), url: feed.url }));
+  }
+
+  protected isPicked(feed: FoundFeed): boolean {
+    return this.model().url === feed.url;
+  }
+
+  /** No feed anywhere, so the address itself becomes the source and is read as a page. */
+  protected onTakePage(): void {
+    this.type.set('PAGE');
+    this.isUrlTaken.set(false);
+    this.model.update((current) => ({ ...current, url: this.searchUrl().trim() }));
+  }
+
   protected onUrlInput(): void {
     this.isUrlTaken.set(false);
   }
@@ -100,7 +162,12 @@ export class FeedsPage {
       this.isSaving.set(true);
       const editingId = this.editingId();
       try {
-        const input: FeedInput = { name: this.model().name.trim(), url: this.model().url.trim(), categoryId };
+        const input: FeedInput = {
+          name: this.model().name.trim(),
+          url: this.model().url.trim(),
+          categoryId,
+          type: this.type(),
+        };
         if (editingId === null) {
           await this.feedsService.create(input);
         } else {
@@ -147,6 +214,10 @@ export class FeedsPage {
       url: feed?.url ?? '',
       categoryId: feed?.categoryId ?? null,
     });
+    this.type.set(feed?.type ?? 'FEED');
+    this.searchUrl.set('');
+    this.foundFeeds.set(null);
+    this.searchFailed.set(false);
     this.feedForm().reset();
     this.hasSubmitAttempted.set(false);
     this.isUrlTaken.set(false);

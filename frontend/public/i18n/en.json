@@ -62,7 +62,7 @@
   },
   "feeds": {
     "title": "Sources",
-    "intro": "The RSS and Atom feeds the news are fetched from. Every source belongs to exactly one category.",
+    "intro": "The sources the news are fetched from. Usually an RSS or Atom feed; where a site offers none, the site itself is read. Every source belongs to exactly one category.",
     "empty": "No source yet.",
     "noCategories": "There is no category without subcategories yet. Create one first.",
     "create": "New source",
@@ -90,7 +90,20 @@
     "createError": "The source could not be created.",
     "saveError": "The source could not be saved.",
     "deleteError": "The source could not be deleted.",
-    "loadError": "Could not load the sources. Is the backend running?"
+    "loadError": "Could not load the sources. Is the backend running?",
+    "type": "Type",
+    "typeFeed": "Feed",
+    "typePage": "Web page",
+    "typeFeedHint": "The address of the feed that is read.",
+    "typePageHint": "This page is read directly, because it offers no feed.",
+    "searchUrl": "Address of the website",
+    "search": "Search",
+    "searchHint": "The ordinary address is enough, say heise.de. The server looks for the feed address itself.",
+    "searchError": "The address could not be checked.",
+    "foundCount": "{{count}} feeds found — please pick one:",
+    "entryCount": "{{count}} entries",
+    "noFeedFound": "No feed was found behind this address.",
+    "takePage": "Read the page directly"
   },
   "picks": {
     "title": "My picks",

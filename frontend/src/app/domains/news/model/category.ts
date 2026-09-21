@@ -18,19 +18,37 @@ export type CategoryInput = {
   sortOrder?: number;
 };
 
-/** A feed as the admin page lists it, with the name of the category it hangs on. */
+/**
+ * How a source is read. The type decides which reader touches it and nothing else: both hand back
+ * the same articles, so the rest of the app is blind to the difference.
+ */
+export type SourceType = 'FEED' | 'PAGE';
+
+/** A source as the admin page lists it, with the name of the category it hangs on. */
 export type Feed = {
   id: string;
   categoryId: string;
   categoryName: string;
   name: string;
   url: string;
+  type: SourceType;
 };
 
 export type FeedInput = {
   name: string;
   url: string;
   categoryId: string;
+  type: SourceType;
+};
+
+/**
+ * A feed the search found behind a web address, already confirmed by reading it. The count says
+ * how much stands in it right now — the quickest way to tell a live feed from an abandoned one.
+ */
+export type FoundFeed = {
+  url: string;
+  title: string;
+  entryCount: number;
 };
 
 /** A feed as the picking page shows it: fewer fields, plus whether this user picked it. */
