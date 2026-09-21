@@ -8,6 +8,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
+  // A ceiling on the whole suite in CI. Without it, 31 specs that each run into
+  // the 30s test timeout, twice retried, keep a runner busy for the better part
+  // of an hour before anyone sees a log. The suite takes well under a minute
+  // when it is healthy, so this only ever fires on a broken run.
+  globalTimeout: isCI ? 8 * 60_000 : undefined,
   // Readable console output plus an HTML report (uploaded as a CI artifact);
   // `open: never` keeps it from launching a browser locally on failure.
   reporter: [['list'], ['html', { open: 'never' }]],
