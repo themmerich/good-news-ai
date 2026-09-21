@@ -35,6 +35,8 @@ test.describe('Profile', () => {
     await page.route('**/api/company', (route) => route.fulfill({ json: { name: 'Musterfirma GmbH', hasLogo: false } }));
     await page.route('**/api/branches', (route) => route.fulfill({ json: branches }));
     await page.route('**/api/profile', (route) => route.fulfill({ json: profile }));
+    // The start page is the picks now, so any route that lands there asks for the categories.
+    await page.route('**/api/news/categories', (route) => route.fulfill({ json: [] }));
 
     await page.goto('/');
     await page.getByText('Anna Admin').click();

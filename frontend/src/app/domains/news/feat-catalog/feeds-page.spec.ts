@@ -4,9 +4,8 @@ import { TestBed } from '@angular/core/testing';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { Confirmation, ConfirmationService, MessageService, ToastMessageOptions } from 'primeng/api';
 
-import { CategoriesService } from '../data/categories-service';
 import { FeedsService } from '../data/feeds-service';
-import { Category, Feed, FeedInput, FoundFeed } from '../model/category';
+import { Feed, FeedInput, FoundFeed } from '../model/category';
 import { FeedsPage } from './feeds-page';
 
 const translations = {
@@ -14,7 +13,6 @@ const translations = {
     title: 'Sources',
     intro: 'The feeds the news are fetched from.',
     empty: 'No source yet.',
-    noCategories: 'There is no category without subcategories yet.',
     create: 'New source',
     createTitle: 'New source',
     editTitle: 'Edit source',
@@ -25,8 +23,6 @@ const translations = {
     urlHint: 'Starting with http:// or https://.',
     urlInvalid: 'That does not look like an address.',
     urlTaken: 'That address is already in the catalog.',
-    category: 'Category',
-    categoryRequired: 'Please choose a category.',
     actions: 'Actions',
     save: 'Save',
     cancel: 'Cancel',
@@ -57,14 +53,8 @@ const translations = {
   },
 };
 
-const sport: Category = { id: 'sport', parentId: null, name: 'Sport', sortOrder: 0, feedCount: 0 };
-const fussball: Category = { id: 'fussball', parentId: 'sport', name: 'Fußball', sortOrder: 0, feedCount: 1 };
-const angular: Category = { id: 'angular', parentId: null, name: 'Angular', sortOrder: 1, feedCount: 0 };
-
 const kicker: Feed = {
   id: 'f1',
-  categoryId: 'fussball',
-  categoryName: 'Fußball',
   name: 'kicker',
   url: 'https://kicker.example/rss',
   type: 'FEED',
@@ -72,7 +62,6 @@ const kicker: Feed = {
 
 describe('FeedsPage', () => {
   const feeds = signal<Feed[]>([]);
-  const categories = signal<Category[]>([]);
   const feedsError = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
   let toasts: ToastMessageOptions[];
@@ -104,17 +93,12 @@ describe('FeedsPage', () => {
     },
   } as unknown as FeedsService;
 
-  const categoriesServiceStub = {
-    categories: { value: categories, error: signal(undefined), isLoading },
-  } as unknown as CategoriesService;
-
   const confirmationServiceStub = {
     confirm: (confirmation: Confirmation) => confirmation.accept?.(),
   } as unknown as ConfirmationService;
 
   beforeEach(async () => {
     feeds.set([kicker]);
-    categories.set([sport, fussball, angular]);
     feedsError.set(undefined);
     toasts = [];
     created = [];
@@ -136,7 +120,6 @@ describe('FeedsPage', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: FeedsService, useValue: feedsServiceStub },
-        { provide: CategoriesService, useValue: categoriesServiceStub },
         { provide: ConfirmationService, useValue: confirmationServiceStub },
         { provide: MessageService, useValue: { add: (toast: ToastMessageOptions) => toasts.push(toast) } },
       ],
@@ -149,25 +132,11 @@ describe('FeedsPage', () => {
     return fixture;
   }
 
-  it('lists the feeds with the category they hang on', () => {
+  it('lists the feeds with their address', () => {
     const element = page().nativeElement as HTMLElement;
 
     expect(element.textContent).toContain('kicker');
-    expect(element.textContent).toContain('Fußball');
     expect(element.querySelector('a[href="https://kicker.example/rss"]')).not.toBeNull();
-  });
-
-  it('offers only the categories that carry no subcategories', () => {
-    const fixture = page();
-
-    // Sport has Fußball under it, so a feed there would have no tab to appear on.
-    expect(fixture.componentInstance['categoryOptions']().map((option) => option.label)).toEqual(['Fußball', 'Angular']);
-  });
-
-  it('names the way out when there is no category to hang a feed on', () => {
-    categories.set([]);
-
-    expect((page().nativeElement as HTMLElement).textContent).toContain('There is no category without subcategories yet.');
   });
 
   it('searches an ordinary address and creates the feed that was picked', async () => {
@@ -182,12 +151,12 @@ describe('FeedsPage', () => {
     // The address goes out as typed but without the padding; the feed address is the server's job.
     expect(probed).toEqual(['kicker.example']);
     fixture.componentInstance['onPickFeed'](probeResult[0]);
-    fixture.componentInstance['model'].update((current) => ({ ...current, categoryId: 'fussball' }));
+    fixture.detectChanges();
     fixture.detectChanges();
 
     await fixture.componentInstance['onSave'](new Event('submit'));
 
-    expect(created).toEqual([{ name: 'kicker News', url: 'https://kicker.example/rss', categoryId: 'fussball', type: 'FEED' }]);
+    expect(created).toEqual([{ name: 'kicker News', url: 'https://kicker.example/rss', type: 'FEED' }]);
     expect(toasts[0].summary).toBe('Source created.');
   });
 
@@ -202,12 +171,12 @@ describe('FeedsPage', () => {
 
     expect(fixture.componentInstance['hasNoFeeds']()).toBe(true);
     fixture.componentInstance['onTakePage']();
-    fixture.componentInstance['model'].update((current) => ({ ...current, name: 'NFL', categoryId: 'fussball' }));
+    fixture.componentInstance['model'].update((current) => ({ ...current, name: 'NFL' }));
     fixture.detectChanges();
 
     await fixture.componentInstance['onSave'](new Event('submit'));
 
-    expect(created).toEqual([{ name: 'NFL', url: 'https://nfl.example/news/', categoryId: 'fussball', type: 'PAGE' }]);
+    expect(created).toEqual([{ name: 'NFL', url: 'https://nfl.example/news/', type: 'PAGE' }]);
   });
 
   it('says so when the search itself went wrong, which is not the same as finding nothing', async () => {
@@ -254,7 +223,7 @@ describe('FeedsPage', () => {
   it('never calls the backend for something that is no address', async () => {
     const fixture = page();
     fixture.componentInstance['onEdit'](kicker);
-    fixture.componentInstance['model'].set({ name: 'kicker', url: 'kicker.example', categoryId: 'fussball' });
+    fixture.componentInstance['model'].set({ name: 'kicker', url: 'kicker.example' });
     fixture.detectChanges();
 
     await fixture.componentInstance['onSave'](new Event('submit'));

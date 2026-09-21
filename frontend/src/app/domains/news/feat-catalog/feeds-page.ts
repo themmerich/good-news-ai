@@ -8,17 +8,14 @@ import { DialogModule } from 'primeng/dialog';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { InputTextModule } from 'primeng/inputtext';
 import { MessageModule } from 'primeng/message';
-import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 
-import { CategoriesService } from '../data/categories-service';
 import { FeedsService } from '../data/feeds-service';
-import { buildTree, leaves } from '../model/category-tree';
 import { Feed, FeedInput, FoundFeed, SourceType } from '../model/category';
 
-type FeedForm = { name: string; url: string; categoryId: string | null };
+type FeedForm = { name: string; url: string };
 
 /** Loose on purpose: it catches a name typed into the URL field, nothing more. */
 const URL_SHAPE = /^\s*https?:\/\/\S+\s*$/i;
@@ -28,8 +25,8 @@ function isUrlConflict(error: unknown): boolean {
 }
 
 /**
- * The catalog's sources. A source hangs on a category without subcategories, because such a
- * category is what becomes a tab; hanging one elsewhere would leave it nowhere to appear.
+ * The catalog's sources. A source carries no category: it brings several subjects through one
+ * address, and which one a story belongs to is settled when that story is rated.
  *
  * <p>Adding one starts from an ordinary web address, not from a feed address: hardly anybody
  * knows those by heart, and sites hide them. The server searches, and what it confirms is offered
@@ -45,7 +42,6 @@ function isUrlConflict(error: unknown): boolean {
     FloatLabelModule,
     InputTextModule,
     MessageModule,
-    SelectModule,
     TableModule,
     TagModule,
     TooltipModule,
@@ -54,18 +50,9 @@ function isUrlConflict(error: unknown): boolean {
 })
 export class FeedsPage {
   protected readonly feedsService = inject(FeedsService);
-  protected readonly categoriesService = inject(CategoriesService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
   private readonly transloco = inject(TranslocoService);
-
-  /** Only categories without subcategories: the others have no tab to show a source on. */
-  protected readonly categoryOptions = computed(() =>
-    leaves(buildTree(this.categoriesService.categories.value())).map((category) => ({
-      label: category.name,
-      value: category.id,
-    })),
-  );
 
   protected readonly editingId = signal<string | null>(null);
   protected readonly isDialogVisible = signal(false);
@@ -89,12 +76,11 @@ export class FeedsPage {
 
   private readonly whenEdited = ({ state }: ChildFieldContext<string>) => state.dirty() || this.hasSubmitAttempted();
 
-  protected readonly model = signal<FeedForm>({ name: '', url: '', categoryId: null });
+  protected readonly model = signal<FeedForm>({ name: '', url: '' });
   protected readonly feedForm = form(this.model, (schemaPath) => {
     required(schemaPath.name, { when: this.whenEdited });
     required(schemaPath.url, { when: this.whenEdited });
     pattern(schemaPath.url, URL_SHAPE, { when: this.whenEdited });
-    required(schemaPath.categoryId, { when: () => this.hasSubmitAttempted() });
   });
 
   protected onCreate(): void {
@@ -155,17 +141,12 @@ export class FeedsPage {
     event.preventDefault();
     this.hasSubmitAttempted.set(true);
     await submit(this.feedForm, async () => {
-      const categoryId = this.model().categoryId;
-      if (categoryId === null) {
-        return;
-      }
       this.isSaving.set(true);
       const editingId = this.editingId();
       try {
         const input: FeedInput = {
           name: this.model().name.trim(),
           url: this.model().url.trim(),
-          categoryId,
           type: this.type(),
         };
         if (editingId === null) {
@@ -209,11 +190,7 @@ export class FeedsPage {
 
   private openDialog(feed: Feed | null): void {
     this.editingId.set(feed?.id ?? null);
-    this.model.set({
-      name: feed?.name ?? '',
-      url: feed?.url ?? '',
-      categoryId: feed?.categoryId ?? null,
-    });
+    this.model.set({ name: feed?.name ?? '', url: feed?.url ?? '' });
     this.type.set(feed?.type ?? 'FEED');
     this.searchUrl.set('');
     this.foundFeeds.set(null);

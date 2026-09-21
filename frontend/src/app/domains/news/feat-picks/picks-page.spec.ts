@@ -4,22 +4,23 @@ import { TranslocoTestingModule } from '@jsverse/transloco';
 import { MessageService, ToastMessageOptions } from 'primeng/api';
 
 import { CatalogService } from '../data/catalog-service';
-import { CatalogCategory } from '../model/category';
+import { PickedCategory } from '../model/category';
 import { PicksPage } from './picks-page';
 
 const translations = {
   picks: {
     title: 'My picks',
-    intro: 'Choose the sources whose news you want to see.',
+    intro: 'Tick the categories you want to see on the board.',
     chosen: 'Picked: {{count}}.',
-    empty: 'The catalog is still empty.',
-    noFeeds: 'No source hangs on this category yet.',
+    showingAll: 'Nothing ticked — you see every category.',
+    noCategories: 'No category yet.',
+    displayOnlyHint: 'The choice only orders what is shown.',
     unsaved: 'Not saved',
     save: 'Save',
     reset: 'Discard',
     saved: 'Picks saved.',
     saveError: 'The picks could not be saved.',
-    loadError: 'Could not load the catalog.',
+    loadError: 'Could not load the categories.',
     leaveTitle: 'Leave the page',
     leaveWarning: 'The picks are not saved.',
     leaveAnyway: 'Leave',
@@ -27,31 +28,16 @@ const translations = {
   },
 };
 
-function catalog(): CatalogCategory[] {
+function catalog(): PickedCategory[] {
   return [
-    { id: 'sport', parentId: null, name: 'Sport', sortOrder: 0, feeds: [] },
-    {
-      id: 'fussball',
-      parentId: 'sport',
-      name: 'Fußball',
-      sortOrder: 0,
-      feeds: [
-        { id: 'f1', name: 'kicker', url: 'https://kicker.example/rss', selected: true },
-        { id: 'f2', name: 'Sportschau', url: 'https://sportschau.example/rss', selected: false },
-      ],
-    },
-    {
-      id: 'angular',
-      parentId: null,
-      name: 'Angular',
-      sortOrder: 1,
-      feeds: [{ id: 'f3', name: 'Angular Blog', url: 'https://blog.angular.example/rss', selected: false }],
-    },
+    { id: 'sport', name: 'Sport', sortOrder: 0, selected: true },
+    { id: 'politik', name: 'Politik', sortOrder: 1, selected: false },
+    { id: 'soziales', name: 'Soziales', sortOrder: 2, selected: false },
   ];
 }
 
 describe('PicksPage', () => {
-  const categories = signal<CatalogCategory[]>([]);
+  const categories = signal<PickedCategory[]>([]);
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
   let toasts: ToastMessageOptions[];
@@ -59,9 +45,9 @@ describe('PicksPage', () => {
   let saveError: unknown;
 
   const catalogServiceStub = {
-    catalog: { value: categories, error, isLoading },
-    savePicks: (feedIds: string[]) => {
-      saved.push(feedIds);
+    categories: { value: categories, error, isLoading },
+    savePicks: (categoryIds: string[]) => {
+      saved.push(categoryIds);
       return saveError ? Promise.reject(saveError) : Promise.resolve();
     },
   } as unknown as CatalogService;
@@ -98,87 +84,92 @@ describe('PicksPage', () => {
   it('starts on what the backend holds, with nothing pending', () => {
     const fixture = page();
 
-    expect(fixture.componentInstance['isPicked']('f1')).toBe(true);
-    expect(fixture.componentInstance['isPicked']('f2')).toBe(false);
+    expect(fixture.componentInstance['isPicked']('sport')).toBe(true);
+    expect(fixture.componentInstance['isPicked']('politik')).toBe(false);
     expect(fixture.componentInstance.hasUnsavedChanges()).toBe(false);
   });
 
-  it('puts a category that carries subcategories above them, not beside them', () => {
-    const fixture = page();
-    const element = fixture.nativeElement as HTMLElement;
-
-    // Sport is a heading; Fußball and Angular are the blocks one ticks.
-    expect(Array.from(element.querySelectorAll('h2')).map((heading) => heading.textContent?.trim())).toEqual(['Sport']);
-    expect(Array.from(element.querySelectorAll('[data-category]')).map((block) => block.getAttribute('data-category'))).toEqual([
-      'Fußball',
-      'Angular',
+  it('lists the categories in their position order, one tick each', () => {
+    categories.set([
+      { id: 'soziales', name: 'Soziales', sortOrder: 2, selected: false },
+      { id: 'sport', name: 'Sport', sortOrder: 0, selected: true },
+      { id: 'politik', name: 'Politik', sortOrder: 1, selected: false },
     ]);
+    const element = page().nativeElement as HTMLElement;
+
+    expect(Array.from(element.querySelectorAll('[data-category]')).map((row) => row.getAttribute('data-category'))).toEqual([
+      'Sport',
+      'Politik',
+      'Soziales',
+    ]);
+    expect(element.querySelectorAll('input[type="checkbox"]')).toHaveLength(3);
   });
 
-  it('ticks and unticks a single source, and notices that something is pending', () => {
+  it('ticks and unticks a category, and notices that something is pending', () => {
     const fixture = page();
 
-    fixture.componentInstance['onToggleFeed']('f2');
-    expect(fixture.componentInstance['isPicked']('f2')).toBe(true);
+    fixture.componentInstance['onToggle']('politik');
+    expect(fixture.componentInstance['isPicked']('politik')).toBe(true);
     expect(fixture.componentInstance.hasUnsavedChanges()).toBe(true);
 
-    fixture.componentInstance['onToggleFeed']('f2');
+    fixture.componentInstance['onToggle']('politik');
     expect(fixture.componentInstance.hasUnsavedChanges()).toBe(false);
   });
 
-  it('takes a whole category, and lets go of it again', () => {
+  /** Nothing ticked is the whole board rather than an empty one, and the page has to say so. */
+  it('reads an empty selection as everything', () => {
     const fixture = page();
-    const fussball = categories().find((category) => category.id === 'fussball')!;
 
-    // One of two is ticked, so the category counts as partly taken and the tick takes the rest.
-    expect(fixture.componentInstance['isCategoryPartlyPicked'](fussball)).toBe(true);
-    fixture.componentInstance['onToggleCategory'](fussball);
-    expect(fixture.componentInstance['isCategoryFullyPicked'](fussball)).toBe(true);
+    fixture.componentInstance['onToggle']('sport');
 
-    fixture.componentInstance['onToggleCategory'](fussball);
-    expect(fixture.componentInstance['isPicked']('f1')).toBe(false);
-    expect(fixture.componentInstance['isPicked']('f2')).toBe(false);
+    expect(fixture.componentInstance['showsEverything']()).toBe(true);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Nothing ticked — you see every category.');
+  });
+
+  it('says that the choice saves nothing, only orders the board', () => {
+    expect((page().nativeElement as HTMLElement).textContent).toContain('The choice only orders what is shown.');
   });
 
   it('saves the whole selection at once', async () => {
     const fixture = page();
-    fixture.componentInstance['onToggleFeed']('f3');
+    fixture.componentInstance['onToggle']('soziales');
 
     await fixture.componentInstance['onSave']();
 
     expect(saved).toHaveLength(1);
-    expect([...saved[0]].sort()).toEqual(['f1', 'f3']);
+    expect([...saved[0]].sort()).toEqual(['soziales', 'sport']);
     expect(toasts[0].summary).toBe('Picks saved.');
   });
 
   it('puts the ticks back where they were on discard', () => {
     const fixture = page();
-    fixture.componentInstance['onToggleFeed']('f2');
-    fixture.componentInstance['onToggleFeed']('f1');
+    fixture.componentInstance['onToggle']('politik');
+    fixture.componentInstance['onToggle']('sport');
 
     fixture.componentInstance['onReset']();
 
-    expect(fixture.componentInstance['isPicked']('f1')).toBe(true);
-    expect(fixture.componentInstance['isPicked']('f2')).toBe(false);
+    expect(fixture.componentInstance['isPicked']('sport')).toBe(true);
+    expect(fixture.componentInstance['isPicked']('politik')).toBe(false);
     expect(fixture.componentInstance.hasUnsavedChanges()).toBe(false);
   });
 
   it('keeps the edits and says so when saving failed', async () => {
     saveError = new Error('offline');
     const fixture = page();
-    fixture.componentInstance['onToggleFeed']('f3');
+    fixture.componentInstance['onToggle']('soziales');
 
     await fixture.componentInstance['onSave']();
 
     expect(toasts[0].summary).toBe('The picks could not be saved.');
-    expect(fixture.componentInstance['isPicked']('f3')).toBe(true);
+    expect(fixture.componentInstance['isPicked']('soziales')).toBe(true);
   });
 
-  it('says so when the catalog is empty, and when it could not be loaded', () => {
+  it('says so when there is no category yet, and when they could not be loaded', () => {
     categories.set([]);
-    expect((page().nativeElement as HTMLElement).textContent).toContain('The catalog is still empty.');
+    expect((page().nativeElement as HTMLElement).textContent).toContain('No category yet.');
 
     error.set(new Error('offline'));
-    expect((page().nativeElement as HTMLElement).textContent).toContain('Could not load the catalog.');
+    expect((page().nativeElement as HTMLElement).textContent).toContain('Could not load the categories.');
   });
 });

@@ -1,11 +1,12 @@
-/** A category as the catalog holds it. `parentId` is null for a top-level one. */
+/**
+ * A category as the catalog holds it. The list is flat — no parents, no levels. Taken together
+ * the names are the vocabulary the AI picks from when it sorts a single story, which is why a
+ * source carries none: one feed brings politics, society and sport through the same address.
+ */
 export type Category = {
   id: string;
-  parentId: string | null;
   name: string;
   sortOrder: number;
-  /** The category's own feeds, never a child's — a top-level category carries none. */
-  feedCount: number;
 };
 
 /**
@@ -14,7 +15,6 @@ export type Category = {
  */
 export type CategoryInput = {
   name: string;
-  parentId: string | null;
   sortOrder?: number;
 };
 
@@ -24,11 +24,9 @@ export type CategoryInput = {
  */
 export type SourceType = 'FEED' | 'PAGE';
 
-/** A source as the admin page lists it, with the name of the category it hangs on. */
+/** A source as the admin page lists it. */
 export type Feed = {
   id: string;
-  categoryId: string;
-  categoryName: string;
   name: string;
   url: string;
   type: SourceType;
@@ -37,7 +35,6 @@ export type Feed = {
 export type FeedInput = {
   name: string;
   url: string;
-  categoryId: string;
   type: SourceType;
 };
 
@@ -51,19 +48,14 @@ export type FoundFeed = {
   entryCount: number;
 };
 
-/** A feed as the picking page shows it: fewer fields, plus whether this user picked it. */
-export type CatalogFeed = {
+/**
+ * A category as the picking page shows it: the tenant's list, plus whether this user ticked it.
+ * The choice orders the board and nothing else — every source is fetched and rated either way,
+ * because a story's category is only known once it has been rated.
+ */
+export type PickedCategory = {
   id: string;
-  name: string;
-  url: string;
-  selected: boolean;
-};
-
-/** A category on the picking page, with the feeds hanging on it. */
-export type CatalogCategory = {
-  id: string;
-  parentId: string | null;
   name: string;
   sortOrder: number;
-  feeds: CatalogFeed[];
+  selected: boolean;
 };

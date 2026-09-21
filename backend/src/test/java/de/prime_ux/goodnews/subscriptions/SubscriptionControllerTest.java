@@ -11,9 +11,7 @@ import de.prime_ux.goodnews.TestcontainersConfiguration;
 import de.prime_ux.goodnews.auth.AsUser;
 import de.prime_ux.goodnews.catalog.Category;
 import de.prime_ux.goodnews.catalog.CategoryRepository;
-import de.prime_ux.goodnews.catalog.Feed;
 import de.prime_ux.goodnews.catalog.FeedRepository;
-import de.prime_ux.goodnews.catalog.SourceType;
 import de.prime_ux.goodnews.tenants.Tenant;
 import de.prime_ux.goodnews.tenants.TenantRepository;
 import de.prime_ux.goodnews.users.AppUser;
@@ -42,7 +40,7 @@ class SubscriptionControllerTest {
 	private AppUserRepository appUserRepository;
 
 	@Autowired
-	private UserFeedRepository userFeedRepository;
+	private UserCategoryRepository userCategoryRepository;
 
 	@Autowired
 	private FeedRepository feedRepository;
@@ -53,105 +51,100 @@ class SubscriptionControllerTest {
 	@Autowired
 	private TenantRepository tenantRepository;
 
-	private Feed kicker;
-	private Feed sportschau;
-	private Feed foreignFeed;
+	private Category sport;
+	private Category politik;
+	private Category foreignCategory;
 
 	@BeforeEach
 	void cleanDatabaseAndCreateCatalog() {
-		userFeedRepository.deleteAll();
+		userCategoryRepository.deleteAll();
 		feedRepository.deleteAll();
-		categoryRepository.deleteAllInBatch();
+		categoryRepository.deleteAll();
 		appUserRepository.deleteAll();
 		tenantRepository.deleteAll();
 		Tenant tenant = tenantRepository.save(new Tenant("Musterfirma GmbH", "musterfirma"));
 		Tenant otherTenant = tenantRepository.save(new Tenant("Beispiel AG", "beispiel-ag"));
-		Category sport = categoryRepository.save(new Category(tenant, null, "Sport", 0));
-		Category fussball = categoryRepository.save(new Category(tenant, sport, "Fußball", 0));
-		kicker = feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss", SourceType.FEED));
-		sportschau = feedRepository.save(new Feed(tenant, fussball, "Sportschau",
-				"https://sportschau.example/rss", SourceType.FEED));
-		Category foreignCategory = categoryRepository.save(new Category(otherTenant, null, "Politik", 0));
-		foreignFeed = feedRepository.save(new Feed(otherTenant, foreignCategory, "Tagesschau",
-				"https://tagesschau.example/rss", SourceType.FEED));
+		sport = categoryRepository.save(new Category(tenant, "Sport", 0));
+		politik = categoryRepository.save(new Category(tenant, "Politik", 1));
+		foreignCategory = categoryRepository.save(new Category(otherTenant, "Wirtschaft", 0));
 		appUserRepository.save(new AppUser(tenant, "ben", "Ben", "Benutzer", "{noop}irrelevant", UserRole.USER));
 		appUserRepository.save(new AppUser(tenant, "uwe", "Uwe", "User", "{noop}irrelevant", UserRole.USER));
 	}
 
 	@Test
 	@AsUser("ben")
-	void showsTheWholeCatalogWithNothingPickedAtFirst() throws Exception {
-		mockMvc.perform(get("/api/news/catalog"))
+	void showsTheTenantsCategoriesWithNothingTickedAtFirst() throws Exception {
+		mockMvc.perform(get("/api/news/categories"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.length()").value(2))
-				.andExpect(jsonPath("$[?(@.name == 'Fußball')].feeds.length()",
-						org.hamcrest.Matchers.hasItem(2)))
-				.andExpect(jsonPath("$..feeds[?(@.selected == true)]").isEmpty())
-				// The other tenant's feed is in neither category.
-				.andExpect(jsonPath("$..feeds[?(@.name == 'Tagesschau')]").isEmpty());
+				.andExpect(jsonPath("$..name", org.hamcrest.Matchers.contains("Sport", "Politik")))
+				.andExpect(jsonPath("$[?(@.selected == true)]").isEmpty())
+				// Nothing of the other tenant.
+				.andExpect(jsonPath("$[?(@.name == 'Wirtschaft')]").isEmpty());
 	}
 
 	@Test
 	@AsUser("ben")
-	void picksFeedsAndFindsThemMarkedAfterwards() throws Exception {
+	void ticksCategoriesAndFindsThemMarkedAfterwards() throws Exception {
 		mockMvc.perform(put("/api/news/picks").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"feedIds\": [\"" + kicker.getId() + "\"]}"))
+				.content("{\"categoryIds\": [\"" + sport.getId() + "\"]}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.length()").value(1));
 
-		mockMvc.perform(get("/api/news/catalog"))
+		mockMvc.perform(get("/api/news/categories"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$..feeds[?(@.name == 'kicker')].selected",
+				.andExpect(jsonPath("$[?(@.name == 'Sport')].selected",
 						org.hamcrest.Matchers.hasItem(true)))
-				.andExpect(jsonPath("$..feeds[?(@.name == 'Sportschau')].selected",
+				.andExpect(jsonPath("$[?(@.name == 'Politik')].selected",
 						org.hamcrest.Matchers.hasItem(false)));
 	}
 
 	@Test
 	@AsUser("ben")
 	void replacesTheSelectionRatherThanAddingToIt() throws Exception {
-		pick(kicker.getId(), sportschau.getId());
+		pick(sport.getId(), politik.getId());
 
-		pick(sportschau.getId());
+		pick(politik.getId());
 
 		AppUser ben = TestUsers.find(appUserRepository, "ben").orElseThrow();
-		assertThat(userFeedRepository.findFeedIdsByUserId(ben.getId())).containsExactly(sportschau.getId());
+		assertThat(userCategoryRepository.findCategoryIdsByUserId(ben.getId())).containsExactly(politik.getId());
 	}
 
+	/** An empty list is the "show me everything" the board reads as no choice at all. */
 	@Test
 	@AsUser("ben")
 	void clearsTheSelectionWithAnEmptyList() throws Exception {
-		pick(kicker.getId());
+		pick(sport.getId());
 
 		mockMvc.perform(put("/api/news/picks").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"feedIds\": []}"))
+				.content("{\"categoryIds\": []}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.length()").value(0));
 	}
 
 	@Test
 	@AsUser("ben")
-	void keepsOnePersonsPicksOutOfAnothersCatalog() throws Exception {
+	void keepsOnePersonsChoiceOutOfAnothersList() throws Exception {
 		AppUser uwe = TestUsers.find(appUserRepository, "uwe").orElseThrow();
-		userFeedRepository.save(new UserFeed(uwe, sportschau));
+		userCategoryRepository.save(new UserCategory(uwe, politik));
 
-		mockMvc.perform(get("/api/news/catalog"))
+		mockMvc.perform(get("/api/news/categories"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$..feeds[?(@.selected == true)]").isEmpty());
+				.andExpect(jsonPath("$[?(@.selected == true)]").isEmpty());
 	}
 
 	@Test
 	@AsUser("ben")
-	void refusesAFeedOfAnotherTenant() throws Exception {
+	void refusesACategoryOfAnotherTenant() throws Exception {
 		mockMvc.perform(put("/api/news/picks").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"feedIds\": [\"" + foreignFeed.getId() + "\"]}"))
+				.content("{\"categoryIds\": [\"" + foreignCategory.getId() + "\"]}"))
 				.andExpect(status().isBadRequest());
 		mockMvc.perform(put("/api/news/picks").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"feedIds\": [\"" + UUID.randomUUID() + "\"]}"))
+				.content("{\"categoryIds\": [\"" + UUID.randomUUID() + "\"]}"))
 				.andExpect(status().isBadRequest());
 	}
 
@@ -160,17 +153,17 @@ class SubscriptionControllerTest {
 	void countsADuplicateOnlyOnce() throws Exception {
 		mockMvc.perform(put("/api/news/picks").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"feedIds\": [\"" + kicker.getId() + "\", \"" + kicker.getId() + "\"]}"))
+				.content("{\"categoryIds\": [\"" + sport.getId() + "\", \"" + sport.getId() + "\"]}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.length()").value(1));
 	}
 
-	private void pick(UUID... feedIds) throws Exception {
-		String ids = java.util.Arrays.stream(feedIds).map(id -> "\"" + id + "\"")
+	private void pick(UUID... categoryIds) throws Exception {
+		String ids = java.util.Arrays.stream(categoryIds).map(id -> "\"" + id + "\"")
 				.collect(java.util.stream.Collectors.joining(", "));
 		mockMvc.perform(put("/api/news/picks").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"feedIds\": [" + ids + "]}"))
+				.content("{\"categoryIds\": [" + ids + "]}"))
 				.andExpect(status().isOk());
 	}
 }

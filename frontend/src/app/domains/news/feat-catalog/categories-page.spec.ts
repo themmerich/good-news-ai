@@ -11,10 +11,9 @@ import { CategoriesPage } from './categories-page';
 const translations = {
   categories: {
     title: 'Categories',
-    intro: 'The subjects news are sorted into.',
+    intro: 'The subjects the single stories are sorted into.',
     empty: 'No category yet.',
     create: 'New category',
-    createChild: 'Add a subcategory to {{name}}',
     createTitle: 'New category',
     editTitle: 'Edit category',
     edit: 'Edit {{name}}',
@@ -22,11 +21,8 @@ const translations = {
     moveDown: 'Move {{name}} down',
     name: 'Name',
     nameRequired: 'Please enter a name.',
-    nameTaken: 'That name is already taken on this level.',
-    parent: 'Top-level category',
-    parentHint: 'Leave empty for the top level.',
-    parentPinned: 'This category has subcategories.',
-    feedCount: '{{count}} sources',
+    nameTaken: 'That name is already taken.',
+    vocabularyHint: 'The AI picks from this list when it sorts a story.',
     save: 'Save',
     cancel: 'Cancel',
     delete: 'Delete',
@@ -36,7 +32,6 @@ const translations = {
     created: 'Category created.',
     saved: 'Category saved.',
     deleted: 'Category deleted.',
-    hasFeeds: 'Sources still hang on this category.',
     createError: 'The category could not be created.',
     saveError: 'The category could not be saved.',
     deleteError: 'The category could not be deleted.',
@@ -44,10 +39,9 @@ const translations = {
   },
 };
 
-const sport: Category = { id: 'sport', parentId: null, name: 'Sport', sortOrder: 0, feedCount: 0 };
-const fussball: Category = { id: 'fussball', parentId: 'sport', name: 'Fußball', sortOrder: 0, feedCount: 2 };
-const football: Category = { id: 'football', parentId: 'sport', name: 'Football', sortOrder: 1, feedCount: 1 };
-const angular: Category = { id: 'angular', parentId: null, name: 'Angular', sortOrder: 1, feedCount: 3 };
+const sport: Category = { id: 'sport', name: 'Sport', sortOrder: 0 };
+const politik: Category = { id: 'politik', name: 'Politik', sortOrder: 1 };
+const soziales: Category = { id: 'soziales', name: 'Soziales', sortOrder: 2 };
 
 describe('CategoriesPage', () => {
   const categories = signal<Category[]>([]);
@@ -83,7 +77,7 @@ describe('CategoriesPage', () => {
   } as unknown as ConfirmationService;
 
   beforeEach(async () => {
-    categories.set([sport, fussball, football, angular]);
+    categories.set([sport, politik, soziales]);
     error.set(undefined);
     toasts = [];
     created = [];
@@ -121,14 +115,17 @@ describe('CategoriesPage', () => {
     return fixture;
   }
 
-  it('nests the subcategories under their parent and counts their sources', () => {
+  it('lists the categories in their position order, whatever order they arrive in', () => {
+    categories.set([soziales, sport, politik]);
+
     const element = render();
 
     const rows = Array.from(element.querySelectorAll('[data-category]')).map((row) => row.getAttribute('data-category'));
-    expect(rows).toEqual(['Sport', 'Fußball', 'Football', 'Angular']);
-    expect(element.textContent).toContain('2 sources');
-    // A top-level category with children shows no count of its own.
-    expect(element.querySelector('[data-category="Sport"]')?.textContent).not.toContain('sources');
+    expect(rows).toEqual(['Sport', 'Politik', 'Soziales']);
+  });
+
+  it('says what the list is for, so nobody fills it with forty overlapping subjects', () => {
+    expect(render().textContent).toContain('The AI picks from this list when it sorts a story.');
   });
 
   it('says so when the catalog is empty', () => {
@@ -137,7 +134,7 @@ describe('CategoriesPage', () => {
     expect(render().textContent).toContain('No category yet.');
   });
 
-  it('shows the load error instead of an empty tree', () => {
+  it('shows the load error instead of an empty list', () => {
     error.set(new Error('offline'));
 
     expect(render().textContent).toContain('Could not load the categories.');
@@ -146,12 +143,12 @@ describe('CategoriesPage', () => {
   it('creates a category from the dialog', async () => {
     const fixture = page();
     fixture.componentInstance['onCreate']();
-    fixture.componentInstance['model'].set({ name: '  Politik ', parentId: null });
+    fixture.componentInstance['model'].set({ name: '  Technik ' });
     fixture.detectChanges();
 
     await fixture.componentInstance['onSave'](new Event('submit'));
 
-    expect(created).toEqual([{ name: 'Politik', parentId: null }]);
+    expect(created).toEqual([{ name: 'Technik' }]);
     expect(toasts[0].summary).toBe('Category created.');
   });
 
@@ -159,7 +156,7 @@ describe('CategoriesPage', () => {
     saveError = new HttpErrorResponse({ status: 409, error: { reason: 'name' } });
     const fixture = page();
     fixture.componentInstance['onCreate']();
-    fixture.componentInstance['model'].set({ name: 'Fußball', parentId: 'sport' });
+    fixture.componentInstance['model'].set({ name: 'Sport' });
     fixture.detectChanges();
 
     await fixture.componentInstance['onSave'](new Event('submit'));
@@ -173,34 +170,24 @@ describe('CategoriesPage', () => {
   it('moves a category by sending its new position, and refuses to move past the ends', async () => {
     const fixture = page();
 
-    await fixture.componentInstance['onMove'](football, -1);
+    await fixture.componentInstance['onMove'](politik, -1);
 
-    expect(updated).toEqual([{ id: 'football', input: { name: 'Football', parentId: 'sport', sortOrder: 0 } }]);
-    // Fußball is already first among its siblings, so there is nowhere up to go.
-    expect(fixture.componentInstance['canMove'](fussball, -1)).toBe(false);
-    expect(fixture.componentInstance['canMove'](fussball, 1)).toBe(true);
+    expect(updated).toEqual([{ id: 'politik', input: { name: 'Politik', sortOrder: 0 } }]);
+    // Sport is already first, so there is nowhere up to go.
+    expect(fixture.componentInstance['canMove'](sport, -1)).toBe(false);
+    expect(fixture.componentInstance['canMove'](sport, 1)).toBe(true);
+    // Soziales is last, so there is nowhere down to go.
+    expect(fixture.componentInstance['canMove'](soziales, 1)).toBe(false);
   });
 
-  it('explains a refused delete rather than showing a bare failure', async () => {
-    removeError = new HttpErrorResponse({ status: 409 });
+  // Deleting used to be refused while sources hung on the category. Nothing refuses it now.
+  it('deletes a category and says so', async () => {
     const fixture = page();
 
-    fixture.componentInstance['onDelete'](fussball);
+    fixture.componentInstance['onDelete'](sport);
     await fixture.whenStable();
 
-    expect(removed).toEqual(['fussball']);
-    expect(toasts[0].summary).toBe('Sources still hang on this category.');
-  });
-
-  it('keeps a category with subcategories on the top level', () => {
-    const fixture = page();
-
-    fixture.componentInstance['onEdit'](sport);
-    fixture.detectChanges();
-    expect(fixture.componentInstance['isPinnedToTopLevel']()).toBe(true);
-
-    fixture.componentInstance['onEdit'](angular);
-    fixture.detectChanges();
-    expect(fixture.componentInstance['isPinnedToTopLevel']()).toBe(false);
+    expect(removed).toEqual(['sport']);
+    expect(toasts[0].summary).toBe('Category deleted.');
   });
 });

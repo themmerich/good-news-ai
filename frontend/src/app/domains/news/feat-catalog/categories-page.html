@@ -6,136 +6,63 @@
     </div>
     <p class="text-surface-500 dark:text-surface-400">{{ t('categories.intro') }}</p>
 
-    <!-- value() throws while the resource is in the error state, so the tree only renders in the else branch. -->
+    <!-- value() throws while the resource is in the error state, so the list only renders in the else branch. -->
     @if (categoriesService.categories.error()) {
       <p class="text-red-600 dark:text-red-400">{{ t('categories.loadError') }}</p>
-    } @else if (tree().length === 0) {
+    } @else if (categories().length === 0) {
       <p class="text-surface-500 dark:text-surface-400">{{ t('categories.empty') }}</p>
     } @else {
-      <!-- A plain nested list: two levels, keyboard-reachable, and nothing a tree widget would
-           add that this page needs. -->
       <ul class="m-0 flex list-none flex-col gap-1 p-0">
-        @for (node of tree(); track node.item.id) {
-          <li>
-            <div
-              class="flex flex-wrap items-center gap-2 rounded-lg border border-surface-200 p-3 dark:border-surface-700"
-              [attr.data-category]="node.item.name"
-            >
-              <span class="font-medium">{{ node.item.name }}</span>
-              @if (node.children.length === 0) {
-                <span class="text-sm text-surface-500 dark:text-surface-400">
-                  {{ t('categories.feedCount', { count: node.item.feedCount }) }}
-                </span>
-              }
-              <div class="ml-auto flex gap-1">
-                <p-button
-                  icon="pi pi-arrow-up"
-                  severity="secondary"
-                  [text]="true"
-                  [ariaLabel]="t('categories.moveUp', { name: node.item.name })"
-                  [pTooltip]="t('categories.moveUp', { name: node.item.name })"
-                  tooltipPosition="bottom"
-                  [disabled]="!canMove(node.item, -1) || movingId() !== null"
-                  (onClick)="onMove(node.item, -1)"
-                />
-                <p-button
-                  icon="pi pi-arrow-down"
-                  severity="secondary"
-                  [text]="true"
-                  [ariaLabel]="t('categories.moveDown', { name: node.item.name })"
-                  [pTooltip]="t('categories.moveDown', { name: node.item.name })"
-                  tooltipPosition="bottom"
-                  [disabled]="!canMove(node.item, 1) || movingId() !== null"
-                  (onClick)="onMove(node.item, 1)"
-                />
-                <p-button
-                  icon="pi pi-plus"
-                  severity="secondary"
-                  [text]="true"
-                  [ariaLabel]="t('categories.createChild', { name: node.item.name })"
-                  [pTooltip]="t('categories.createChild', { name: node.item.name })"
-                  tooltipPosition="bottom"
-                  (onClick)="onCreateChild(node.item)"
-                />
-                <p-button
-                  icon="pi pi-pencil"
-                  severity="secondary"
-                  [text]="true"
-                  [ariaLabel]="t('categories.edit', { name: node.item.name })"
-                  [pTooltip]="t('categories.edit', { name: node.item.name })"
-                  tooltipPosition="bottom"
-                  (onClick)="onEdit(node.item)"
-                />
-                <p-button
-                  icon="pi pi-trash"
-                  severity="danger"
-                  [text]="true"
-                  [ariaLabel]="t('categories.deleteNamed', { name: node.item.name })"
-                  [pTooltip]="t('categories.deleteNamed', { name: node.item.name })"
-                  tooltipPosition="bottom"
-                  (onClick)="onDelete(node.item)"
-                />
-              </div>
+        @for (category of categories(); track category.id) {
+          <li
+            class="flex flex-wrap items-center gap-2 rounded-lg border border-surface-200 p-3 dark:border-surface-700"
+            [attr.data-category]="category.name"
+          >
+            <span class="font-medium">{{ category.name }}</span>
+            <div class="ml-auto flex gap-1">
+              <p-button
+                icon="pi pi-arrow-up"
+                severity="secondary"
+                [text]="true"
+                [ariaLabel]="t('categories.moveUp', { name: category.name })"
+                [pTooltip]="t('categories.moveUp', { name: category.name })"
+                tooltipPosition="bottom"
+                [disabled]="!canMove(category, -1) || movingId() !== null"
+                (onClick)="onMove(category, -1)"
+              />
+              <p-button
+                icon="pi pi-arrow-down"
+                severity="secondary"
+                [text]="true"
+                [ariaLabel]="t('categories.moveDown', { name: category.name })"
+                [pTooltip]="t('categories.moveDown', { name: category.name })"
+                tooltipPosition="bottom"
+                [disabled]="!canMove(category, 1) || movingId() !== null"
+                (onClick)="onMove(category, 1)"
+              />
+              <p-button
+                icon="pi pi-pencil"
+                severity="secondary"
+                [text]="true"
+                [ariaLabel]="t('categories.edit', { name: category.name })"
+                [pTooltip]="t('categories.edit', { name: category.name })"
+                tooltipPosition="bottom"
+                (onClick)="onEdit(category)"
+              />
+              <p-button
+                icon="pi pi-trash"
+                severity="danger"
+                [text]="true"
+                [ariaLabel]="t('categories.deleteNamed', { name: category.name })"
+                [pTooltip]="t('categories.deleteNamed', { name: category.name })"
+                tooltipPosition="bottom"
+                (onClick)="onDelete(category)"
+              />
             </div>
-
-            @if (node.children.length > 0) {
-              <ul class="m-0 mt-1 ml-8 flex list-none flex-col gap-1 p-0">
-                @for (child of childrenOf(node); track child.id) {
-                  <li
-                    class="flex flex-wrap items-center gap-2 rounded-lg border border-surface-200 p-3 dark:border-surface-700"
-                    [attr.data-category]="child.name"
-                  >
-                    <span>{{ child.name }}</span>
-                    <span class="text-sm text-surface-500 dark:text-surface-400">
-                      {{ t('categories.feedCount', { count: child.feedCount }) }}
-                    </span>
-                    <div class="ml-auto flex gap-1">
-                      <p-button
-                        icon="pi pi-arrow-up"
-                        severity="secondary"
-                        [text]="true"
-                        [ariaLabel]="t('categories.moveUp', { name: child.name })"
-                        [pTooltip]="t('categories.moveUp', { name: child.name })"
-                        tooltipPosition="bottom"
-                        [disabled]="!canMove(child, -1) || movingId() !== null"
-                        (onClick)="onMove(child, -1)"
-                      />
-                      <p-button
-                        icon="pi pi-arrow-down"
-                        severity="secondary"
-                        [text]="true"
-                        [ariaLabel]="t('categories.moveDown', { name: child.name })"
-                        [pTooltip]="t('categories.moveDown', { name: child.name })"
-                        tooltipPosition="bottom"
-                        [disabled]="!canMove(child, 1) || movingId() !== null"
-                        (onClick)="onMove(child, 1)"
-                      />
-                      <p-button
-                        icon="pi pi-pencil"
-                        severity="secondary"
-                        [text]="true"
-                        [ariaLabel]="t('categories.edit', { name: child.name })"
-                        [pTooltip]="t('categories.edit', { name: child.name })"
-                        tooltipPosition="bottom"
-                        (onClick)="onEdit(child)"
-                      />
-                      <p-button
-                        icon="pi pi-trash"
-                        severity="danger"
-                        [text]="true"
-                        [ariaLabel]="t('categories.deleteNamed', { name: child.name })"
-                        [pTooltip]="t('categories.deleteNamed', { name: child.name })"
-                        tooltipPosition="bottom"
-                        (onClick)="onDelete(child)"
-                      />
-                    </div>
-                  </li>
-                }
-              </ul>
-            }
           </li>
         }
       </ul>
+      <p class="text-sm text-surface-500 dark:text-surface-400">{{ t('categories.vocabularyHint') }}</p>
     }
 
     <p-dialog
@@ -154,25 +81,6 @@
             <p-message severity="error" variant="simple" size="small">{{ t('categories.nameTaken') }}</p-message>
           } @else if (categoryForm.name().invalid()) {
             <p-message severity="error" variant="simple" size="small">{{ t('categories.nameRequired') }}</p-message>
-          }
-        </div>
-        <div class="flex flex-col gap-2">
-          <p-floatlabel variant="on">
-            <p-select
-              inputId="category-parent"
-              [options]="topLevelOptions()"
-              optionLabel="label"
-              optionValue="value"
-              [showClear]="true"
-              [disabled]="isPinnedToTopLevel()"
-              [formField]="categoryForm.parentId"
-            />
-            <label for="category-parent">{{ t('categories.parent') }}</label>
-          </p-floatlabel>
-          @if (isPinnedToTopLevel()) {
-            <p class="text-sm text-surface-500 dark:text-surface-400">{{ t('categories.parentPinned') }}</p>
-          } @else {
-            <p class="text-sm text-surface-500 dark:text-surface-400">{{ t('categories.parentHint') }}</p>
           }
         </div>
         <div class="flex justify-end gap-2">

@@ -26,6 +26,8 @@ test.describe('Tenants', () => {
     // it comes back 401 and the interceptor sends the browser to the login.
     await page.route('**/api/auth/me', (route) => route.fulfill({ json: superuser }));
     await page.route('**/api/company', (route) => route.fulfill({ json: { name: 'good news ai', hasLogo: false } }));
+    // The start page is the picks now, so any route that lands there asks for the categories.
+    await page.route('**/api/news/categories', (route) => route.fulfill({ json: [] }));
   });
 
   test('lists the tenants with what hangs on them, reached from the sidebar', async ({ page }) => {
@@ -132,7 +134,7 @@ test.describe('Tenants', () => {
       .getByRole('button', { name: 'Öffnen' })
       .click();
 
-    await expect(page).toHaveURL(/localhost:4200\/$/);
+    await expect(page).toHaveURL(/localhost:4200\/picks$/);
     expect(opened).toEqual({ slug: 'musterfirma' });
     const navigation = page.getByRole('navigation');
     await expect(navigation.getByText('Nachrichten')).toBeVisible();
@@ -151,7 +153,7 @@ test.describe('Tenants', () => {
 
     await page.goto('/tenants');
 
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/picks$/);
     await expect(page.getByRole('link', { name: 'Übersicht' })).toHaveCount(0);
   });
 });

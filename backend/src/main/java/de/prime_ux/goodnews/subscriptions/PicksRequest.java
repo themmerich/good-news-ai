@@ -9,5 +9,5 @@ import java.util.UUID;
  * afterwards. An empty list clears the selection, which is a thing someone may well want and
  * would be awkward to express as a list of removals.
  */
-record PicksRequest(@NotNull List<UUID> feedIds) {
+record PicksRequest(@NotNull List<UUID> categoryIds) {
 }

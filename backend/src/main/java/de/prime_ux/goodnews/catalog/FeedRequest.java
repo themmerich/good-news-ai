@@ -4,7 +4,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.util.UUID;
 
 /**
  * Create and update share the same shape. The URL check is deliberately loose: it catches a name
@@ -18,7 +17,7 @@ import java.util.UUID;
  */
 record FeedRequest(@NotBlank @Size(max = 200) String name,
 		@NotBlank @Size(max = 500) @Pattern(regexp = "(?i)\\s*https?://\\S+\\s*") String url,
-		@NotNull UUID categoryId, @NotNull SourceType type) {
+		@NotNull SourceType type) {
 
 	String trimmedName() {
 		return name.trim();

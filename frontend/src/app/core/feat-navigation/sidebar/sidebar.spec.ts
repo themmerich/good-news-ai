@@ -10,7 +10,6 @@ import { Sidebar } from './sidebar';
 const translations = {
   shell: {
     workspace: 'News',
-    testPage: 'Test page',
     picks: 'My picks',
     administration: 'Administration',
     users: 'Users',
@@ -102,7 +101,7 @@ describe('Sidebar', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent;
     expect(text).toContain('good news ai');
     expect(text).toContain('News');
-    expect(text).toContain('Test page');
+    expect(text).toContain('My picks');
   });
 
   it('signs out through the store and leaves for the login page', async () => {
@@ -115,14 +114,6 @@ describe('Sidebar', () => {
     // Forgetting the brand for the next person is the store's job on the way out.
     expect(signedOut).toBe(1);
     expect(navigateSpy).toHaveBeenCalledWith(['/login']);
-  });
-
-  it('links the test page to the start page', () => {
-    const fixture = TestBed.createComponent(Sidebar);
-    fixture.detectChanges();
-
-    const startLink = (fixture.nativeElement as HTMLElement).querySelector('a[href="/"]');
-    expect(startLink?.textContent).toContain('Test page');
   });
 
   it('shows the signed-in user with their tenant', () => {

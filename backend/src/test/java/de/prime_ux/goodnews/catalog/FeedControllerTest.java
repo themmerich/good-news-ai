@@ -50,8 +50,6 @@ class FeedControllerTest {
 	private StubHttpFetcher httpFetcher;
 
 	private Tenant tenant;
-	private Category sport;
-	private Category fussball;
 	private Feed kicker;
 	private Feed foreignFeed;
 
@@ -59,30 +57,28 @@ class FeedControllerTest {
 	void cleanDatabaseAndCreateFeeds() {
 		httpFetcher.clear();
 		feedRepository.deleteAll();
-		categoryRepository.deleteAllInBatch();
+		categoryRepository.deleteAll();
 		appUserRepository.deleteAll();
 		tenantRepository.deleteAll();
 		tenant = tenantRepository.save(new Tenant("Musterfirma GmbH", "musterfirma"));
 		Tenant otherTenant = tenantRepository.save(new Tenant("Beispiel AG", "beispiel-ag"));
-		sport = categoryRepository.save(new Category(tenant, null, "Sport", 0));
-		fussball = categoryRepository.save(new Category(tenant, sport, "Fußball", 0));
-		kicker = feedRepository.save(new Feed(tenant, fussball, "kicker", "https://kicker.example/rss", SourceType.FEED));
-		Category foreignCategory = categoryRepository.save(new Category(otherTenant, null, "Politik", 0));
-		foreignFeed = feedRepository.save(new Feed(otherTenant, foreignCategory, "Tagesschau",
-				"https://tagesschau.example/rss", SourceType.FEED));
+		kicker = feedRepository.save(new Feed(tenant, "kicker", "https://kicker.example/rss", SourceType.FEED));
+		foreignFeed = feedRepository.save(
+				new Feed(otherTenant, "Tagesschau", "https://tagesschau.example/rss", SourceType.FEED));
 		appUserRepository.save(new AppUser(tenant, "anna", "Anna", "Admin", "{noop}irrelevant", UserRole.ADMIN));
 		appUserRepository.save(new AppUser(tenant, "ben", "Ben", "Benutzer", "{noop}irrelevant", UserRole.USER));
 	}
 
 	@Test
 	@AsUser("anna")
-	void listsTheOwnTenantsFeedsWithTheirCategory() throws Exception {
+	void listsTheOwnTenantsFeeds() throws Exception {
 		mockMvc.perform(get("/api/feeds"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.length()").value(1))
 				.andExpect(jsonPath("$[0].name").value("kicker"))
-				.andExpect(jsonPath("$[0].categoryName").value("Fußball"))
-				.andExpect(jsonPath("$[0].categoryId").value(fussball.getId().toString()));
+				.andExpect(jsonPath("$[0].url").value("https://kicker.example/rss"))
+				// A source carries no category any more; its stories are sorted one by one.
+				.andExpect(jsonPath("$[0].categoryId").doesNotExist());
 	}
 
 	@Test
@@ -93,7 +89,7 @@ class FeedControllerTest {
 		mockMvc.perform(post("/api/feeds").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"name\": \" Sportschau \", \"url\": \" https://sportschau.example/rss \","
-						+ " \"categoryId\": \"" + fussball.getId() + "\", \"type\": \"FEED\"}"))
+						+ " \"type\": \"FEED\"}"))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.name").value("Sportschau"))
 				.andExpect(jsonPath("$.url").value("https://sportschau.example/rss"));
@@ -107,7 +103,7 @@ class FeedControllerTest {
 		mockMvc.perform(post("/api/feeds").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"name\": \"Nochmal kicker\", \"url\": \"HTTPS://KICKER.EXAMPLE/RSS\","
-						+ " \"categoryId\": \"" + fussball.getId() + "\", \"type\": \"FEED\"}"))
+						+ " \"type\": \"FEED\"}"))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.reason").value("url"));
 	}
@@ -117,33 +113,19 @@ class FeedControllerTest {
 	void refusesSomethingThatIsNoUrl() throws Exception {
 		mockMvc.perform(post("/api/feeds").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"kicker\", \"url\": \"kicker.example\", \"categoryId\": \""
-						+ fussball.getId() + "\", \"type\": \"FEED\"}"))
+				.content("{\"name\": \"kicker\", \"url\": \"kicker.example\", \"type\": \"FEED\"}"))
 				.andExpect(status().isBadRequest());
 	}
 
 	@Test
 	@AsUser("anna")
-	void refusesACategoryThatHasSubcategories() throws Exception {
-		// Sport carries Fußball, so it is no leaf and would have no tab to appear on.
-		mockMvc.perform(post("/api/feeds").with(csrf())
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"Sportschau\", \"url\": \"https://sportschau.example/rss\","
-						+ " \"categoryId\": \"" + sport.getId() + "\", \"type\": \"FEED\"}"))
-				.andExpect(status().isBadRequest());
-	}
-
-	@Test
-	@AsUser("anna")
-	void movesAFeedToAnotherCategory() throws Exception {
-		Category football = categoryRepository.save(new Category(tenant, sport, "Football", 1));
-
+	void renamesAFeed() throws Exception {
 		mockMvc.perform(put("/api/feeds/" + kicker.getId()).with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"kicker\", \"url\": \"https://kicker.example/rss\", \"categoryId\": \""
-						+ football.getId() + "\", \"type\": \"FEED\"}"))
+				.content("{\"name\": \"kicker.de\", \"url\": \"https://kicker.example/rss\","
+						+ " \"type\": \"FEED\"}"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.categoryName").value("Football"));
+				.andExpect(jsonPath("$.name").value("kicker.de"));
 	}
 
 	@Test
@@ -160,8 +142,8 @@ class FeedControllerTest {
 	void neverReachesAnotherTenantsFeed() throws Exception {
 		mockMvc.perform(put("/api/feeds/" + foreignFeed.getId()).with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"Gekapert\", \"url\": \"https://gekapert.example/rss\", \"categoryId\": \""
-						+ fussball.getId() + "\", \"type\": \"FEED\"}"))
+				.content("{\"name\": \"Gekapert\", \"url\": \"https://gekapert.example/rss\","
+						+ " \"type\": \"FEED\"}"))
 				.andExpect(status().isNotFound());
 		mockMvc.perform(delete("/api/feeds/" + foreignFeed.getId()).with(csrf()))
 				.andExpect(status().isNotFound());
@@ -221,8 +203,7 @@ class FeedControllerTest {
 		// later in a run that quietly brought nothing back.
 		mockMvc.perform(post("/api/feeds").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"Tot\", \"url\": \"https://tot.example/rss\", \"categoryId\": \""
-						+ fussball.getId() + "\", \"type\": \"FEED\"}"))
+				.content("{\"name\": \"Tot\", \"url\": \"https://tot.example/rss\", \"type\": \"FEED\"}"))
 				.andExpect(status().isBadRequest());
 
 		assertThat(feedRepository.findAllOfTenant(tenant.getId())).hasSize(1);
@@ -235,8 +216,7 @@ class FeedControllerTest {
 		// belongs to the run rather than to the form.
 		mockMvc.perform(post("/api/feeds").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"NFL\", \"url\": \"https://nfl.example/news/\", \"categoryId\": \""
-						+ fussball.getId() + "\", \"type\": \"PAGE\"}"))
+				.content("{\"name\": \"NFL\", \"url\": \"https://nfl.example/news/\", \"type\": \"PAGE\"}"))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.type").value("PAGE"));
 	}
@@ -246,8 +226,7 @@ class FeedControllerTest {
 	void refusesABodyThatLeavesTheTypeOpen() throws Exception {
 		mockMvc.perform(post("/api/feeds").with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"name\": \"kicker\", \"url\": \"https://neu.example/rss\", \"categoryId\": \""
-						+ fussball.getId() + "\"}"))
+				.content("{\"name\": \"kicker\", \"url\": \"https://neu.example/rss\"}"))
 				.andExpect(status().isBadRequest());
 	}
 
