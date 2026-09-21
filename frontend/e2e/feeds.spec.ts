@@ -10,26 +10,9 @@ const adminUser = {
   hasAvatar: false,
 };
 
-const sport = { id: 'sport', parentId: null, name: 'Sport', sortOrder: 0, feedCount: 0 };
-const fussball = { id: 'fussball', parentId: 'sport', name: 'Fußball', sortOrder: 0, feedCount: 1 };
+const kicker = { id: 'f1', name: 'kicker', url: 'https://kicker.example/rss', type: 'FEED' };
 
-const kicker = {
-  id: 'f1',
-  categoryId: 'fussball',
-  categoryName: 'Fußball',
-  name: 'kicker',
-  url: 'https://kicker.example/rss',
-  type: 'FEED',
-};
-
-const nfl = {
-  id: 'f2',
-  categoryId: 'fussball',
-  categoryName: 'Fußball',
-  name: 'NFL',
-  url: 'https://nfl.example/news/',
-  type: 'PAGE',
-};
+const nfl = { id: 'f2', name: 'NFL', url: 'https://nfl.example/news/', type: 'PAGE' };
 
 test.describe('Sources', () => {
   test.beforeEach(async ({ page }) => {
@@ -37,7 +20,6 @@ test.describe('Sources', () => {
     // it comes back 401 and the interceptor sends the browser to the login.
     await page.route('**/api/auth/me', (route) => route.fulfill({ json: adminUser }));
     await page.route('**/api/company', (route) => route.fulfill({ json: { name: 'Musterfirma GmbH', hasLogo: false } }));
-    await page.route('**/api/categories', (route) => route.fulfill({ json: [sport, fussball] }));
   });
 
   test('opens from the sidebar and says how each source is read', async ({ page }) => {
@@ -84,8 +66,6 @@ test.describe('Sources', () => {
     await page.getByRole('radio', { name: /heise online RSS/ }).check();
     // The title comes along as a proposal and stays editable.
     await expect(page.getByLabel('Name')).toHaveValue('heise online RSS');
-    await page.locator('p-select[inputid="feed-category"]').click();
-    await page.getByRole('option', { name: 'Fußball' }).click();
     await page.getByRole('button', { name: 'Speichern' }).click();
 
     await expect(page.getByText('Quelle angelegt.')).toBeVisible();
@@ -93,7 +73,6 @@ test.describe('Sources', () => {
     expect(created).toMatchObject({
       name: 'heise online RSS',
       url: 'https://heise.example/rss/heise.rdf',
-      categoryId: 'fussball',
       type: 'FEED',
     });
   });
@@ -117,8 +96,6 @@ test.describe('Sources', () => {
     await expect(page.getByText('Zu dieser Adresse wurde kein Feed gefunden.')).toBeVisible();
     await page.getByRole('button', { name: 'Seite direkt auslesen' }).click();
     await page.getByLabel('Name').fill('NFL');
-    await page.locator('p-select[inputid="feed-category"]').click();
-    await page.getByRole('option', { name: 'Fußball' }).click();
     await page.getByRole('button', { name: 'Speichern' }).click();
 
     await expect(page.getByText('Quelle angelegt.')).toBeVisible();
@@ -136,13 +113,14 @@ test.describe('Sources', () => {
     await expect(page.getByRole('button', { name: 'Speichern' })).toBeDisabled();
   });
 
-  test('names the way out when no category can carry a source yet', async ({ page }) => {
+  // A source used to need a category before it could be entered at all. It carries none now, so
+  // an empty category list is no longer in the way.
+  test('lets a source be entered before any category exists', async ({ page }) => {
     await page.route('**/api/categories', (route) => route.fulfill({ json: [] }));
     await page.route('**/api/feeds', (route) => route.fulfill({ json: [] }));
 
     await page.goto('/feeds');
 
-    await expect(page.getByText('Es gibt noch keine Kategorie ohne Unterkategorien.', { exact: false })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Neue Quelle' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Neue Quelle' })).toBeEnabled();
   });
 });

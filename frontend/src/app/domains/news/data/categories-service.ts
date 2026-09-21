@@ -5,8 +5,8 @@ import { firstValueFrom } from 'rxjs';
 import { Category, CategoryInput } from '../model/category';
 
 /**
- * The catalog's categories, for the admin pages. Every change reloads the list, so what the row
- * shows is what the backend holds — a 409 for a name a sibling already has travels up to the
+ * The catalog's categories, for the admin page. Every change reloads the list, so what the row
+ * shows is what the backend holds — a 409 for a name the tenant already uses travels up to the
  * page as the HttpErrorResponse it is, with `error.reason === 'name'` in its body.
  */
 @Service()
