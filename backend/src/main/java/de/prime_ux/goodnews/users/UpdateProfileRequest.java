@@ -1,0 +1,12 @@
+package de.prime_ux.goodnews.users;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
+import java.util.UUID;
+
+record UpdateProfileRequest(@NotBlank String firstName, @NotBlank String lastName, LocalDate birthDate,
+		LocalDate joinedAt, UUID branchId, @Email String email, String phone, String fax,
+		@Size(max = 200) String position) {
+}

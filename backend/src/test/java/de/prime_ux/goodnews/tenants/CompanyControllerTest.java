@@ -1,0 +1,244 @@
+package de.prime_ux.goodnews.tenants;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import de.prime_ux.goodnews.TestcontainersConfiguration;
+import de.prime_ux.goodnews.branches.Branch;
+import de.prime_ux.goodnews.branches.BranchRepository;
+import de.prime_ux.goodnews.users.AppUser;
+import de.prime_ux.goodnews.users.AppUserRepository;
+import de.prime_ux.goodnews.users.TestUsers;
+import de.prime_ux.goodnews.users.UserRole;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import de.prime_ux.goodnews.auth.AsUser;
+import org.springframework.test.web.servlet.MockMvc;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
+class CompanyControllerTest {
+
+	@Autowired
+	private MockMvc mockMvc;
+
+	@Autowired
+	private AppUserRepository appUserRepository;
+
+	@Autowired
+	private TenantRepository tenantRepository;
+
+	@Autowired
+	private TenantLogoRepository tenantLogoRepository;
+
+
+
+	@Autowired
+	private BranchRepository branchRepository;
+
+	private Tenant tenant;
+	private Tenant otherTenant;
+
+	@BeforeEach
+	void cleanDatabaseAndCreateUsers() {
+		// Dependents first; other test classes share this context's database.
+		tenantLogoRepository.deleteAll();
+		appUserRepository.deleteAll();
+		branchRepository.deleteAll();
+		tenantRepository.deleteAll();
+		tenant = tenantRepository.save(new Tenant("Musterfirma GmbH", "musterfirma"));
+		otherTenant = tenantRepository.save(new Tenant("Beispiel AG", "beispiel-ag"));
+		appUserRepository.save(new AppUser(tenant, "anna", "Anna", "Admin", "{noop}irrelevant",
+				UserRole.ADMIN));
+		appUserRepository.save(new AppUser(tenant, "ben", "Ben", "Benutzer", "{noop}irrelevant",
+				UserRole.USER));
+		appUserRepository.save(new AppUser(otherTenant, "fritz", "Fritz", "Fremd", "{noop}irrelevant",
+				UserRole.ADMIN));
+	}
+
+	@Test
+	@AsUser("ben")
+	void everyUserReadsTheOwnTenantsCompany() throws Exception {
+		mockMvc.perform(get("/api/company"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.name").value("Musterfirma GmbH"))
+				.andExpect(jsonPath("$.website").isEmpty())
+				.andExpect(jsonPath("$.logoDisplay").value("WITH_NAME"))
+				.andExpect(jsonPath("$.hasLogo").value(false));
+	}
+
+	@Test
+	@AsUser("anna")
+	void savesTheCompanyAndBlanksBecomeNull() throws Exception {
+		mockMvc.perform(put("/api/company").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"name": " Musterfirma AG ", "website": "https://musterfirma.example",
+						 "logoDisplay": "LOGO_ONLY", "primaryColor": "#10b981"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.name").value("Musterfirma AG"))
+				.andExpect(jsonPath("$.website").value("https://musterfirma.example"))
+				.andExpect(jsonPath("$.logoDisplay").value("LOGO_ONLY"))
+				.andExpect(jsonPath("$.primaryColor").value("#10b981"));
+
+		// The company name is the tenant name — the rename shows up in the session response too.
+		Tenant saved = tenantRepository.findById(tenant.getId()).orElseThrow();
+		assertThat(saved.getName()).isEqualTo("Musterfirma AG");
+		assertThat(saved.getLogoDisplay()).isEqualTo(LogoDisplay.LOGO_ONLY);
+		// The other tenant is untouched.
+		assertThat(tenantRepository.findById(otherTenant.getId()).orElseThrow().getName()).isEqualTo("Beispiel AG");
+	}
+
+	@Test
+	@AsUser("anna")
+	void savesTheSignatureAndWhoSignsTheSchedulersDrafts() throws Exception {
+		AppUser ben = TestUsers.find(appUserRepository, "ben").orElseThrow();
+
+		mockMvc.perform(put("/api/company").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"name": "Musterfirma GmbH", "logoDisplay": "WITH_NAME",
+						 "replySignature": "  Mit freundlichen Grüßen\\n{{vorname}} {{nachname}}\\n{{firma}}  ",
+						 "signatureUserId": "%s"}
+						""".formatted(ben.getId())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.replySignature").value("Mit freundlichen Grüßen\n{{vorname}} {{nachname}}\n{{firma}}"))
+				.andExpect(jsonPath("$.signatureUserId").value(ben.getId().toString()));
+
+		// Read back by everyone, stand-in included: the detail page never needs it, but the
+		// company page does.
+		mockMvc.perform(get("/api/company"))
+				.andExpect(jsonPath("$.signatureUserId").value(ben.getId().toString()));
+
+		// Left out again: no signature, nobody signing for the scheduler.
+		mockMvc.perform(put("/api/company").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"name": "Musterfirma GmbH", "logoDisplay": "WITH_NAME"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.replySignature").value(""))
+				.andExpect(jsonPath("$.signatureUserId").doesNotExist());
+	}
+
+	@Test
+	@AsUser("anna")
+	void refusesAStrangerAsTheOneWhoSigns() throws Exception {
+		AppUser fritz = TestUsers.find(appUserRepository, "fritz").orElseThrow();
+
+		// Another tenant's user is not found rather than forbidden.
+		mockMvc.perform(put("/api/company").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"name": "Musterfirma GmbH", "logoDisplay": "WITH_NAME", "signatureUserId": "%s"}
+						""".formatted(fritz.getId())))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	@AsUser("anna")
+	void savingTheCompanyLeavesTheBranchesAlone() throws Exception {
+		Branch headquarters = branchRepository.save(new Branch(tenant, "Hauptfiliale Musterstadt", true));
+
+		mockMvc.perform(put("/api/company").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Musterfirma AG\", \"logoDisplay\": \"WITH_NAME\"}"))
+				.andExpect(status().isOk());
+
+		// The sites carry their own names; renaming the company does not touch them.
+		assertThat(branchRepository.findById(headquarters.getId()).orElseThrow().getName())
+				.isEqualTo("Hauptfiliale Musterstadt");
+	}
+
+	@Test
+	@AsUser("anna")
+	void rejectsABlankNameAMissingLogoDisplayAndABrokenColor() throws Exception {
+		mockMvc.perform(put("/api/company").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \" \", \"logoDisplay\": \"WITH_NAME\"}"))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(put("/api/company").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Musterfirma GmbH\"}"))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(put("/api/company").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Musterfirma GmbH\", \"logoDisplay\": \"WITH_NAME\", \"primaryColor\": \"red\"}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	@AsUser("ben")
+	void deniesWritesToNonAdmins() throws Exception {
+		mockMvc.perform(put("/api/company").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Umbenannt\"}"))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(delete("/api/company/logo").with(csrf())).andExpect(status().isForbidden());
+	}
+
+	@Test
+	@AsUser("anna")
+	void uploadsReplacesAndDeletesTheLogo() throws Exception {
+		MockMultipartFile logo = new MockMultipartFile("file", "logo.png", MediaType.IMAGE_PNG_VALUE,
+				new byte[] { 1, 2, 3 });
+		mockMvc.perform(multipart(HttpMethod.PUT, "/api/company/logo").file(logo).with(csrf()))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/company")).andExpect(jsonPath("$.hasLogo").value(true));
+		mockMvc.perform(get("/api/company/logo"))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType(MediaType.IMAGE_PNG))
+				.andExpect(content().bytes(new byte[] { 1, 2, 3 }));
+
+		// A GIF is fine too — large animated brand logos are a thing.
+		MockMultipartFile replacement = new MockMultipartFile("file", "logo.gif", MediaType.IMAGE_GIF_VALUE,
+				new byte[] { 9, 9 });
+		mockMvc.perform(multipart(HttpMethod.PUT, "/api/company/logo").file(replacement).with(csrf()))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/company/logo")).andExpect(content().bytes(new byte[] { 9, 9 }));
+
+		mockMvc.perform(delete("/api/company/logo").with(csrf())).andExpect(status().isNoContent());
+		mockMvc.perform(get("/api/company/logo")).andExpect(status().isNotFound());
+		mockMvc.perform(get("/api/company")).andExpect(jsonPath("$.hasLogo").value(false));
+	}
+
+	@Test
+	@AsUser("anna")
+	void rejectsAnOversizedOrForeignImageType() throws Exception {
+		MockMultipartFile svg = new MockMultipartFile("file", "logo.svg", "image/svg+xml", new byte[] { 1 });
+		mockMvc.perform(multipart(HttpMethod.PUT, "/api/company/logo").file(svg).with(csrf()))
+				.andExpect(status().isBadRequest());
+
+		MockMultipartFile oversized = new MockMultipartFile("file", "logo.png", MediaType.IMAGE_PNG_VALUE,
+				new byte[2 * 1024 * 1024 + 1]);
+		mockMvc.perform(multipart(HttpMethod.PUT, "/api/company/logo").file(oversized).with(csrf()))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	@AsUser("fritz")
+	void logosAreScopedToTheOwnTenant() throws Exception {
+		tenantLogoRepository.save(new TenantLogo(tenant, new byte[] { 1 }, MediaType.IMAGE_PNG_VALUE));
+
+		// Fritz's tenant has no logo of its own — the other tenant's logo must not leak.
+		mockMvc.perform(get("/api/company/logo")).andExpect(status().isNotFound());
+		mockMvc.perform(get("/api/company")).andExpect(jsonPath("$.hasLogo").value(false));
+	}
+}

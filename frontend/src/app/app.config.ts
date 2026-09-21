@@ -1,0 +1,102 @@
+import { registerLocaleData } from '@angular/common';
+import localeDe from '@angular/common/locales/de';
+import { ApplicationConfig, LOCALE_ID, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideTransloco } from '@jsverse/transloco';
+import { ConfirmationService, MessageService } from 'primeng/api';
+import { providePrimeNG } from 'primeng/config';
+import Aura from '@primeuix/themes/aura';
+
+import { routes } from './app.routes';
+import { environment } from '../environments/environment';
+import { TranslocoHttpLoader } from './core/transloco-loader';
+import { unauthorizedInterceptor } from './core/unauthorized-interceptor';
+
+// German date/number formatting for Angular pipes (DatePipe etc.), matching
+// the default language. Revisit once a language switcher exists.
+registerLocaleData(localeDe);
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideBrowserGlobalErrorListeners(),
+    { provide: LOCALE_ID, useValue: 'de-DE' },
+    // Route parameters arrive as component inputs; the case detail reads its id that way.
+    provideRouter(routes, withComponentInputBinding()),
+    provideHttpClient(withInterceptors([unauthorizedInterceptor])),
+    // Feed the app-wide <p-toast /> and <p-confirmdialog /> in the shell; pages
+    // inject them to raise toasts and to ask before something irreversible.
+    MessageService,
+    ConfirmationService,
+    provideTransloco({
+      config: {
+        availableLangs: ['de', 'en'],
+        defaultLang: 'de',
+        fallbackLang: 'en',
+        reRenderOnLangChange: true,
+        prodMode: environment.production,
+      },
+      loader: TranslocoHttpLoader,
+    }),
+    providePrimeNG({
+      license: environment.primengLicense,
+      // PrimeNG's own UI texts (e.g. the column filter menu). German to match
+      // the default language; revisit once a language switcher exists.
+      translation: {
+        startsWith: 'Beginnt mit',
+        contains: 'Enthält',
+        notContains: 'Enthält nicht',
+        endsWith: 'Endet mit',
+        equals: 'Gleich',
+        notEquals: 'Ungleich',
+        noFilter: 'Kein Filter',
+        // What a filter box says when nothing matches; used by the assignee selects.
+        emptyFilterMessage: 'Keine Treffer',
+        dateIs: 'Datum ist',
+        dateIsNot: 'Datum ist nicht',
+        dateBefore: 'Datum vor',
+        dateAfter: 'Datum nach',
+        matchAll: 'Alle Bedingungen erfüllen',
+        matchAny: 'Mindestens eine Bedingung erfüllen',
+        addRule: 'Regel hinzufügen',
+        removeRule: 'Regel entfernen',
+        apply: 'Übernehmen',
+        clear: 'Leeren',
+        // The datepicker's calendar overlay and text format.
+        dayNames: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'],
+        dayNamesShort: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
+        dayNamesMin: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
+        monthNames: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
+        monthNamesShort: ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
+        today: 'Heute',
+        weekHeader: 'KW',
+        firstDayOfWeek: 1,
+        dateFormat: 'dd.mm.yy',
+        aria: {
+          showFilterMenu: 'Filtermenü anzeigen',
+          hideFilterMenu: 'Filtermenü verbergen',
+          // The paginator's buttons carry an icon and nothing else.
+          firstPageLabel: 'Erste Seite',
+          prevPageLabel: 'Vorherige Seite',
+          nextPageLabel: 'Nächste Seite',
+          lastPageLabel: 'Letzte Seite',
+          pageLabel: 'Seite {page}',
+          rowsPerPageLabel: 'Zeilen pro Seite',
+          jumpToPageDropdownLabel: 'Zu Seite springen',
+        },
+      },
+      theme: {
+        preset: Aura,
+        options: {
+          // Same class the ThemeService toggles on <html>; keeps PrimeNG and
+          // Tailwind dark mode in sync.
+          darkModeSelector: '.dark',
+          cssLayer: {
+            name: 'primeng',
+            order: 'theme, base, primeng, components, utilities',
+          },
+        },
+      },
+    }),
+  ],
+};

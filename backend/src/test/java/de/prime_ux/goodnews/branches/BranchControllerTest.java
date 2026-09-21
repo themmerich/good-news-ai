@@ -1,0 +1,239 @@
+package de.prime_ux.goodnews.branches;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import de.prime_ux.goodnews.TestcontainersConfiguration;
+import de.prime_ux.goodnews.tenants.Tenant;
+import de.prime_ux.goodnews.tenants.TenantLogoRepository;
+import de.prime_ux.goodnews.tenants.TenantRepository;
+import de.prime_ux.goodnews.users.AppUser;
+import de.prime_ux.goodnews.users.AppUserRepository;
+import de.prime_ux.goodnews.users.TestUsers;
+import de.prime_ux.goodnews.users.UserRole;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import de.prime_ux.goodnews.auth.AsUser;
+import org.springframework.test.web.servlet.MockMvc;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
+class BranchControllerTest {
+
+	@Autowired
+	private MockMvc mockMvc;
+
+	@Autowired
+	private AppUserRepository appUserRepository;
+
+	@Autowired
+	private BranchRepository branchRepository;
+
+	@Autowired
+	private TenantRepository tenantRepository;
+
+	@Autowired
+	private TenantLogoRepository tenantLogoRepository;
+
+
+
+	private Tenant tenant;
+	private Branch headquarters;
+	private Branch filiale;
+	private Branch foreignBranch;
+
+	@BeforeEach
+	void cleanDatabaseAndCreateBranches() {
+		// Dependents first; other test classes share this context's database.
+		tenantLogoRepository.deleteAll();
+		appUserRepository.deleteAll();
+		branchRepository.deleteAll();
+		tenantRepository.deleteAll();
+		tenant = tenantRepository.save(new Tenant("Musterfirma GmbH", "musterfirma"));
+		Tenant otherTenant = tenantRepository.save(new Tenant("Beispiel AG", "beispiel-ag"));
+		headquarters = branchRepository.save(new Branch(tenant, "Musterfirma GmbH", true));
+		filiale = branchRepository.save(new Branch(tenant, "Filiale Hamburg", false));
+		// Another tenant's branch must never show up nor be reachable.
+		foreignBranch = branchRepository.save(new Branch(otherTenant, "Filiale Wien", false));
+		appUserRepository.save(new AppUser(tenant, "anna", "Anna", "Admin", "{noop}irrelevant",
+				UserRole.ADMIN));
+		appUserRepository.save(new AppUser(tenant, "ben", "Ben", "Benutzer", "{noop}irrelevant",
+				UserRole.USER));
+	}
+
+	@Test
+	@AsUser("ben")
+	void everyUserListsTheOwnTenantsBranchesHeadquartersFirst() throws Exception {
+		mockMvc.perform(get("/api/branches"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$[0].name").value("Musterfirma GmbH"))
+				.andExpect(jsonPath("$[0].headquarters").value(true))
+				.andExpect(jsonPath("$[1].name").value("Filiale Hamburg"))
+				.andExpect(jsonPath("$[1].headquarters").value(false));
+	}
+
+	@Test
+	@AsUser("anna")
+	void createsABranchAndBlanksBecomeNull() throws Exception {
+		mockMvc.perform(post("/api/branches").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"name": " Filiale Berlin ", "headquarters": false, "street": "Torstr. 5",
+						 "postalCode": "10119", "city": "Berlin", "country": "Deutschland",
+						 "phone": "+49 30 555", "fax": "", "email": "berlin@musterfirma.example"}"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.name").value("Filiale Berlin"))
+				.andExpect(jsonPath("$.headquarters").value(false))
+				.andExpect(jsonPath("$.city").value("Berlin"))
+				.andExpect(jsonPath("$.fax").isEmpty());
+
+		assertThat(branchRepository.findAllByTenantIdOrderByHeadquartersDescNameAsc(tenant.getId())).hasSize(3);
+	}
+
+	@Test
+	@AsUser("anna")
+	void creatingAHeadquartersDemotesThePreviousOne() throws Exception {
+		mockMvc.perform(post("/api/branches").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Hauptfiliale Berlin\", \"headquarters\": true}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.headquarters").value(true));
+
+		// At most one headquarters per company: the old one steps back automatically.
+		assertThat(branchRepository.findById(headquarters.getId()).orElseThrow().isHeadquarters()).isFalse();
+		assertThat(branchRepository.findByTenantIdAndHeadquartersTrue(tenant.getId()).orElseThrow().getName())
+				.isEqualTo("Hauptfiliale Berlin");
+	}
+
+	@Test
+	@AsUser("anna")
+	void promotesABranchToTheHeadquarters() throws Exception {
+		mockMvc.perform(put("/api/branches/" + filiale.getId()).with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Filiale Hamburg\", \"headquarters\": true}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.headquarters").value(true));
+
+		assertThat(branchRepository.findById(headquarters.getId()).orElseThrow().isHeadquarters()).isFalse();
+		assertThat(branchRepository.findByTenantIdAndHeadquartersTrue(tenant.getId()).orElseThrow().getId())
+				.isEqualTo(filiale.getId());
+	}
+
+	@Test
+	@AsUser("anna")
+	void keepsTheHeadquartersWhenItSavesItself() throws Exception {
+		mockMvc.perform(put("/api/branches/" + headquarters.getId()).with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Hauptfiliale Musterstadt\", \"headquarters\": true, \"city\": \"Musterstadt\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.name").value("Hauptfiliale Musterstadt"))
+				.andExpect(jsonPath("$.headquarters").value(true));
+
+		assertThat(branchRepository.findByTenantIdAndHeadquartersTrue(tenant.getId()).orElseThrow().getId())
+				.isEqualTo(headquarters.getId());
+	}
+
+	@Test
+	@AsUser("anna")
+	void demotesTheHeadquartersLeavingTheCompanyWithoutOne() throws Exception {
+		mockMvc.perform(put("/api/branches/" + headquarters.getId()).with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Musterfirma GmbH\", \"headquarters\": false}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.headquarters").value(false));
+
+		// A company without a headquarters is unusual but valid.
+		assertThat(branchRepository.findByTenantIdAndHeadquartersTrue(tenant.getId())).isEmpty();
+	}
+
+	@Test
+	@AsUser("anna")
+	void deletesTheHeadquartersToo() throws Exception {
+		mockMvc.perform(delete("/api/branches/" + headquarters.getId()).with(csrf()))
+				.andExpect(status().isNoContent());
+
+		assertThat(branchRepository.findById(headquarters.getId())).isEmpty();
+	}
+
+	@Test
+	@AsUser("anna")
+	void rejectsADuplicateBranchName() throws Exception {
+		mockMvc.perform(post("/api/branches").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"filiale hamburg\", \"headquarters\": false}"))
+				.andExpect(status().isConflict());
+	}
+
+	@Test
+	@AsUser("anna")
+	void requiresTheHeadquartersFlagToBeStated() throws Exception {
+		// Whether a site is the headquarters is never implied — the client says it.
+		mockMvc.perform(post("/api/branches").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Filiale Berlin\"}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	@AsUser("anna")
+	void updatesABranch() throws Exception {
+		mockMvc.perform(put("/api/branches/" + filiale.getId()).with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Filiale Altona\", \"headquarters\": false, \"city\": \"Hamburg\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.name").value("Filiale Altona"))
+				.andExpect(jsonPath("$.city").value("Hamburg"));
+	}
+
+	@Test
+	@AsUser("anna")
+	void answersNotFoundForAnotherTenantsBranch() throws Exception {
+		mockMvc.perform(put("/api/branches/" + foreignBranch.getId()).with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Gekapert\", \"headquarters\": false}"))
+				.andExpect(status().isNotFound());
+
+		mockMvc.perform(delete("/api/branches/" + foreignBranch.getId()).with(csrf()))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	@AsUser("anna")
+	void deletingABranchOnlyUnsetsTheUsersAssignment() throws Exception {
+		AppUser ben = TestUsers.find(appUserRepository, "ben").orElseThrow();
+		ben.updateProfile(ben.getFirstName(), ben.getLastName(), null, null, filiale, null, null, null, null);
+		// The assignment survives until the branch itself goes away.
+		appUserRepository.save(ben);
+
+		mockMvc.perform(delete("/api/branches/" + filiale.getId()).with(csrf()))
+				.andExpect(status().isNoContent());
+
+		assertThat(branchRepository.findById(filiale.getId())).isEmpty();
+		assertThat(TestUsers.find(appUserRepository, "ben"))
+				.hasValueSatisfying(saved -> assertThat(saved.getBranch()).isNull());
+	}
+
+	@Test
+	@AsUser("ben")
+	void deniesWritesToNonAdmins() throws Exception {
+		mockMvc.perform(post("/api/branches").with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"name\": \"Filiale Berlin\", \"headquarters\": false}"))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(delete("/api/branches/" + filiale.getId()).with(csrf()))
+				.andExpect(status().isForbidden());
+	}
+}

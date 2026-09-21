@@ -1,0 +1,15 @@
+# Explicit project name: without it Compose derives the project from the
+# directory name ("backend"), sharing containers — and their database state —
+# with every other checkout whose backend lives in a "backend" folder.
+name: good-news-ai
+
+services:
+  postgres:
+    # Major version pinned; keep in sync with TestcontainersConfiguration.
+    image: 'postgres:18'
+    environment:
+      - 'POSTGRES_DB=goodnews'
+      - 'POSTGRES_PASSWORD=secret'
+      - 'POSTGRES_USER=goodnews'
+    ports:
+      - '5432'

@@ -1,0 +1,111 @@
+<ng-container *transloco="let t">
+  <div
+    class="relative flex items-center justify-between border-b border-surface-200 bg-surface-0 px-8 py-4 lg:static dark:border-surface-700 dark:bg-surface-900"
+  >
+    <div class="flex items-center">
+      <button
+        type="button"
+        pStyleClass="#app-sidebar"
+        enterFromClass="hidden"
+        enterActiveClass="animate-fadeinleft"
+        leaveToClass="hidden"
+        leaveActiveClass="animate-fadeoutleft"
+        [hideOnOutsideClick]="true"
+        [hideOnResize]="true"
+        resizeSelector=".layout-container"
+        [attr.aria-label]="t('shell.openMenu')"
+        class="mr-4 block cursor-pointer text-surface-700 lg:hidden dark:text-surface-100"
+      >
+        <i class="pi pi-bars text-xl!" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="flex items-center gap-8">
+      <button type="button" (click)="themeSettings.toggle($event)" [attr.aria-label]="t('shell.themeSettings')" class="cursor-pointer">
+        <i class="pi pi-palette text-lg! leading-none! text-surface-500 dark:text-surface-400" aria-hidden="true"></i>
+      </button>
+      <button
+        type="button"
+        (click)="onToggleTheme()"
+        [attr.aria-label]="t(themeService.isDark() ? 'shell.lightMode' : 'shell.darkMode')"
+        class="cursor-pointer"
+      >
+        <i
+          class="pi text-lg! leading-none! text-surface-500 dark:text-surface-400"
+          [class.pi-moon]="!themeService.isDark()"
+          [class.pi-sun]="themeService.isDark()"
+          aria-hidden="true"
+        ></i>
+      </button>
+      @if (authStore.avatarUrl(); as avatarUrl) {
+        <p-avatar [image]="avatarUrl" shape="circle" />
+      } @else {
+        <p-avatar icon="pi pi-user" shape="circle" />
+      }
+    </div>
+    <!-- `contents` removes the host's flex box (it would push the button group off the right edge
+         in the justify-between row); the overlay itself is absolutely positioned and unaffected. -->
+    <p-popover #themeSettings class="contents">
+      <div class="flex w-60 flex-col gap-4 p-1">
+        <div>
+          <span class="mb-2 block text-sm font-medium">{{ t('shell.primaryColor') }}</span>
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Back to the default: the tenant's company color, or the preset's own primary. -->
+            <button
+              type="button"
+              (click)="themeService.resetPrimary()"
+              [attr.aria-pressed]="themeService.primary() === null"
+              class="h-5 cursor-pointer rounded-full border border-surface-300 px-2 text-xs leading-none outline-offset-2 outline-primary dark:border-surface-600"
+              [class.outline-2]="themeService.primary() === null"
+            >
+              {{ t('shell.primaryDefault') }}
+            </button>
+            @for (swatch of primarySwatches; track swatch.name) {
+              <button
+                type="button"
+                (click)="themeService.setPrimary(swatch.name)"
+                [attr.aria-label]="swatch.name"
+                [attr.aria-pressed]="themeService.primary() === swatch.name"
+                class="h-5 w-5 cursor-pointer rounded-full outline-offset-2 outline-primary"
+                [class.outline-2]="themeService.primary() === swatch.name"
+                [style.background-color]="swatch.color"
+              ></button>
+            }
+          </div>
+        </div>
+        <div>
+          <span class="mb-2 block text-sm font-medium">{{ t('shell.surfaceColor') }}</span>
+          <div class="flex flex-wrap gap-2">
+            @for (swatch of surfaceSwatches; track swatch.name) {
+              <button
+                type="button"
+                (click)="themeService.setSurface(swatch.name)"
+                [attr.aria-label]="swatch.name"
+                [attr.aria-pressed]="themeService.surface() === swatch.name"
+                class="h-5 w-5 cursor-pointer rounded-full outline-offset-2 outline-primary"
+                [class.outline-2]="themeService.surface() === swatch.name"
+                [style.background-color]="swatch.color"
+              ></button>
+            }
+          </div>
+        </div>
+        <div>
+          <span class="mb-2 block text-sm font-medium">{{ t('shell.preset') }}</span>
+          <div class="flex flex-wrap gap-2">
+            @for (preset of presets; track preset) {
+              <button
+                type="button"
+                (click)="themeService.setPreset(preset)"
+                [attr.aria-pressed]="themeService.preset() === preset"
+                class="cursor-pointer rounded-lg border border-surface-300 px-2 py-1 text-sm capitalize dark:border-surface-600"
+                [class.bg-primary]="themeService.preset() === preset"
+                [class.text-primary-contrast]="themeService.preset() === preset"
+              >
+                {{ preset }}
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+    </p-popover>
+  </div>
+</ng-container>
