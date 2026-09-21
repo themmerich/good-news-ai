@@ -19,10 +19,12 @@ export const routes: Routes = [
     canActivate: [authGuard],
     children: [
       {
-        // The start page is about a tenant: a super-user with none open is sent to the tenants page.
+        // Nothing of its own lives at the root yet: the board that belongs here comes with the
+        // fetching, and until then the picks are the one page every signed-in user has. The
+        // redirect is what the board replaces, so nothing else has to move.
         path: '',
-        canActivate: [tenantGuard],
-        loadChildren: () => import('./domains/playground/api/playground-routes').then((m) => m.playgroundRoutes),
+        pathMatch: 'full',
+        redirectTo: 'picks',
       },
       {
         path: 'tenants',

@@ -20,6 +20,8 @@ test.describe('Sources', () => {
     // it comes back 401 and the interceptor sends the browser to the login.
     await page.route('**/api/auth/me', (route) => route.fulfill({ json: adminUser }));
     await page.route('**/api/company', (route) => route.fulfill({ json: { name: 'Musterfirma GmbH', hasLogo: false } }));
+    // The start page is the picks now, so any route that lands there asks for the categories.
+    await page.route('**/api/news/categories', (route) => route.fulfill({ json: [] }));
   });
 
   test('opens from the sidebar and says how each source is read', async ({ page }) => {

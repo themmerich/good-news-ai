@@ -22,7 +22,8 @@ test.describe('Login', () => {
 
     await page.goto('/');
 
-    await expect(page).toHaveURL(/\/login$/);
+    // The root sends them on to the picks first, so that is what they return to after signing in.
+    await expect(page).toHaveURL(/\/login\?returnUrl=%2Fpicks$/);
     await expect(page.getByLabel('Benutzername')).toBeVisible();
     await expect(page.getByLabel('Passwort')).toBeVisible();
   });
@@ -45,7 +46,7 @@ test.describe('Login', () => {
     await page.getByLabel('Passwort').fill('secret');
     await page.getByRole('button', { name: 'Anmelden' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Testseite' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Meine Auswahl' })).toBeVisible();
     expect(sent).toEqual({ tenant: 'musterfirma', username: 'admin', password: 'secret' });
     // The sidebar footer shows who is signed in, and for which tenant; the
     // company name also brands the sidebar's top, hence first().

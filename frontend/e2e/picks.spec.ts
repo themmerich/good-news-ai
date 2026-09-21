@@ -73,12 +73,15 @@ test.describe('My picks', () => {
   });
 
   test('asks before leaving with unsaved ticks', async ({ page }) => {
+    // Signed in as an admin here, only for the sake of having somewhere to go: the picks are the
+    // one page a regular user can reach from the sidebar now.
+    await page.route('**/api/auth/me', (route) => route.fulfill({ json: { ...user, role: 'admin' } }));
     await page.route('**/api/news/categories', (route) => route.fulfill({ json: categories }));
 
     await page.goto('/picks');
     await page.getByRole('checkbox', { name: 'Politik', exact: true }).check();
     await expect(page.getByText('Nicht gespeichert')).toBeVisible();
-    await page.getByRole('link', { name: 'Testseite' }).click();
+    await page.getByRole('link', { name: 'Kategorien' }).click();
 
     await expect(page.getByText('Die Auswahl ist nicht gespeichert.', { exact: false })).toBeVisible();
     await page.getByRole('button', { name: 'Hierbleiben' }).click();

@@ -1,7 +1,6 @@
 {
   "shell": {
     "workspace": "News",
-    "testPage": "Test page",
     "administration": "Administration",
     "users": "Users",
     "company": "Company",
@@ -22,10 +21,6 @@
     "picks": "My picks",
     "categories": "Categories",
     "feeds": "Sources"
-  },
-  "test": {
-    "title": "Test page",
-    "intro": "An empty page to try PrimeNG components on."
   },
   "categories": {
     "title": "Categories",
