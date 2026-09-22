@@ -1,6 +1,8 @@
 package de.prime_ux.goodnews.news;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.prime_ux.goodnews.TestcontainersConfiguration;
 import de.prime_ux.goodnews.aisettings.ChatClients;
@@ -268,6 +270,36 @@ class ArticleProcessorTest {
 	}
 
 	/**
+	 * The effort is a string from the properties, and the SDK would take any string here: a typo
+	 * would reach the provider and fail once per call rather than once at startup.
+	 */
+	@Test
+	void refusesAnEffortLevelThatDoesNotExist() {
+		assertThatThrownBy(() -> processorWithEffort("gründlich"))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("goodnews.ai.effort");
+	}
+
+	@Test
+	void takesEveryLevelTheProviderKnows() {
+		for (String level : List.of("low", "medium", "high", "xhigh", "max", "  HIGH  ")) {
+			assertThatCode(() -> processorWithEffort(level)).doesNotThrowAnyException();
+		}
+	}
+
+	/** Empty leaves the provider its own default, which is how one asks for no opinion. */
+	@Test
+	void leavesTheEffortAloneWhenTheSettingIsEmpty() {
+		assertThatCode(() -> processorWithEffort("")).doesNotThrowAnyException();
+	}
+
+	private ArticleProcessor processorWithEffort(String effort) {
+		return new ArticleProcessor(StubChatClients.answering("{}"), this.categoryRepository,
+				this.articleRepository, new StubAiCalls(), effort,
+				new ClassPathResource("prompts/rate-articles.md"));
+	}
+
+	/**
 	 * A processor whose model answers this. Built by hand rather than taken from the context: the
 	 * answer differs per test, and a bean is made once when the context starts.
 	 */
@@ -278,7 +310,7 @@ class ArticleProcessorTest {
 	private ArticleProcessor processorUsing(StubChatClients chatClients) {
 		this.chat = chatClients;
 		this.aiCalls = new StubAiCalls();
-		return new ArticleProcessor(chatClients, this.categoryRepository, this.articleRepository, this.aiCalls,
+		return new ArticleProcessor(chatClients, this.categoryRepository, this.articleRepository, this.aiCalls, "low",
 				new ClassPathResource("prompts/rate-articles.md"));
 	}
 
