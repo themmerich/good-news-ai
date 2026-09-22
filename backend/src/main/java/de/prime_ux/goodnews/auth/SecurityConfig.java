@@ -39,6 +39,9 @@ class SecurityConfig {
 				.requestMatchers("/api/tenants/**").hasRole("SUPERUSER")
 				.requestMatchers("/api/settings/**").hasAnyRole("ADMIN", "SUPERUSER")
 				.requestMatchers("/api/users/**").hasAnyRole("ADMIN", "SUPERUSER")
+				// What the AI cost is a question about the tenant, not about the news it brought:
+				// it belongs with the administration and is read by the same people.
+				.requestMatchers("/api/costs/**").hasAnyRole("ADMIN", "SUPERUSER")
 				// The catalog is the admins' to curate. What a user picked from it, and the news
 				// that come out of it, are open to everyone with a tenant.
 				.requestMatchers("/api/categories/**").hasAnyRole("ADMIN", "SUPERUSER")

@@ -1,6 +1,9 @@
 package de.prime_ux.goodnews.aisettings;
 
+import de.prime_ux.goodnews.costs.AiCalls;
+import de.prime_ux.goodnews.costs.Purpose;
 import de.prime_ux.goodnews.tenants.Tenant;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Service;
 
 /**
@@ -25,16 +28,21 @@ public class ApiKeyTester {
 	}
 
 	private final ChatClients chatClients;
+	private final AiCalls aiCalls;
 
-	ApiKeyTester(ChatClients chatClients) {
+	ApiKeyTester(ChatClients chatClients, AiCalls aiCalls) {
 		this.chatClients = chatClients;
+		this.aiCalls = aiCalls;
 	}
 
 	/** @param tenant whose admin is trying the key; the call is billed to the key */
 	public ApiKeyTestResult test(Tenant tenant, String apiKey) {
 		try {
 			// The answer is thrown away; that the call was accepted is the whole point.
-			this.chatClients.withApiKey(apiKey).prompt().user("ping").call().chatResponse();
+			ChatResponse response = this.chatClients.withApiKey(apiKey).prompt().user("ping").call().chatResponse();
+			// Thrown away as an answer, kept as a cost: a ping is a handful of tokens, but leaving
+			// it out would put the page a little below the invoice for no reason anybody could see.
+			this.aiCalls.record(tenant, Purpose.KEY_TEST, response);
 			return ApiKeyTestResult.ok();
 		} catch (RuntimeException e) {
 			return ApiKeyTestResult.failure(e.getMessage());

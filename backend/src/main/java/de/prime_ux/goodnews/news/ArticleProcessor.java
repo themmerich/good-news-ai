@@ -1,8 +1,11 @@
 package de.prime_ux.goodnews.news;
 
+import com.anthropic.models.messages.OutputConfig;
 import de.prime_ux.goodnews.aisettings.ChatClients;
 import de.prime_ux.goodnews.catalog.Category;
 import de.prime_ux.goodnews.catalog.CategoryRepository;
+import de.prime_ux.goodnews.costs.AiCalls;
+import de.prime_ux.goodnews.costs.Purpose;
 import de.prime_ux.goodnews.tenants.Tenant;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -14,8 +17,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -59,14 +62,19 @@ public class ArticleProcessor {
 	private final ChatClients chatClients;
 	private final CategoryRepository categoryRepository;
 	private final ArticleRepository articleRepository;
+	private final AiCalls aiCalls;
+	private final OutputConfig.Effort effort;
 	private final String instructions;
 
 	ArticleProcessor(ChatClients chatClients, CategoryRepository categoryRepository,
-			ArticleRepository articleRepository,
+			ArticleRepository articleRepository, AiCalls aiCalls,
+			@Value("${goodnews.ai.effort:low}") String effort,
 			@Value("classpath:prompts/rate-articles.md") Resource instructions) {
 		this.chatClients = chatClients;
 		this.categoryRepository = categoryRepository;
 		this.articleRepository = articleRepository;
+		this.aiCalls = aiCalls;
+		this.effort = effortOf(effort);
 		this.instructions = read(instructions);
 	}
 
@@ -85,7 +93,7 @@ public class ArticleProcessor {
 		try {
 			response = this.chatClients.forTenant(tenant)
 					.prompt()
-					.options(ChatOptions.builder().maxTokens(MAX_TOKENS))
+					.options(callOptions())
 					.user(prompt(batch, byName.values()))
 					.call()
 					.chatResponse();
@@ -95,6 +103,9 @@ public class ArticleProcessor {
 			log.warn("a bundle of {} stories could not be rated", batch.size(), e);
 			return new Outcome(0, describe(e));
 		}
+		// Booked before the answer is read: a bundle that came back unusable was paid for all the
+		// same, and a page that left those out would not agree with the invoice.
+		this.aiCalls.record(tenant, Purpose.RATING, response);
 		String text = textOf(response);
 		if (text.isBlank()) {
 			String why = "the model answered with no text at all (" + accountOf(response) + ")";
@@ -109,6 +120,45 @@ public class ArticleProcessor {
 			return new Outcome(0, "the answer could not be read: " + describe(e));
 		}
 		return new Outcome(store(batch, byName, answer), null);
+	}
+
+	/**
+	 * How hard the model should think about a bundle, and how much room its answer gets.
+	 *
+	 * <p>Effort is the lever that decides what a run costs. Reasoning is billed as output, output
+	 * costs five times what input costs, and a measured run spent roughly two thirds of its output
+	 * tokens on reasoning that never reached the page. Reading a teaser, writing one sentence about
+	 * it and picking from a list of names does not need much of it — hence the default of
+	 * {@code low}, and hence the knob, so the trade can be measured rather than argued.
+	 */
+	private AnthropicChatOptions.Builder callOptions() {
+		AnthropicChatOptions.Builder options = AnthropicChatOptions.builder().maxTokens(MAX_TOKENS);
+		if (this.effort != null) {
+			options.effort(this.effort);
+		}
+		return options;
+	}
+
+	/**
+	 * The configured effort, or null to leave the provider its own default.
+	 *
+	 * <p>Matched against the levels by hand rather than passed on as written: the SDK takes any
+	 * string here and a typo would travel all the way to the provider, where it fails per call
+	 * rather than at startup.
+	 */
+	private static OutputConfig.Effort effortOf(String name) {
+		if (name == null || name.isBlank()) {
+			return null;
+		}
+		return switch (name.strip().toLowerCase(Locale.ROOT)) {
+			case "low" -> OutputConfig.Effort.LOW;
+			case "medium" -> OutputConfig.Effort.MEDIUM;
+			case "high" -> OutputConfig.Effort.HIGH;
+			case "xhigh" -> OutputConfig.Effort.XHIGH;
+			case "max" -> OutputConfig.Effort.MAX;
+			default -> throw new IllegalArgumentException(
+					"goodnews.ai.effort is " + name + "; it must be low, medium, high, xhigh, max, or empty");
+		};
 	}
 
 	/**
