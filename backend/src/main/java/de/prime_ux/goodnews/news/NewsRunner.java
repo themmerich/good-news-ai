@@ -5,6 +5,7 @@ import de.prime_ux.goodnews.catalog.FeedRepository;
 import de.prime_ux.goodnews.reading.SourceContent;
 import de.prime_ux.goodnews.reading.SourceReadException;
 import de.prime_ux.goodnews.tenants.Tenant;
+import de.prime_ux.goodnews.tenants.TenantRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -36,18 +37,22 @@ public class NewsRunner {
 	private final FeedRepository feedRepository;
 	private final ArticleRepository articleRepository;
 	private final ArticleStore articleStore;
+	private final ArticleProcessor articleProcessor;
+	private final TenantRepository tenantRepository;
 	private final SourceReaders readers;
 	private final TaskExecutor executor;
 
 	// Named, because the context holds two of these: the one Boot sets up for the application and
 	// the scheduler's own. A pass that took a minute has no business on the scheduler thread.
 	NewsRunner(NewsRunRepository runRepository, FeedRepository feedRepository, ArticleRepository articleRepository,
-			ArticleStore articleStore, SourceReaders readers,
-			@Qualifier("applicationTaskExecutor") TaskExecutor executor) {
+			ArticleStore articleStore, ArticleProcessor articleProcessor, TenantRepository tenantRepository,
+			SourceReaders readers, @Qualifier("applicationTaskExecutor") TaskExecutor executor) {
 		this.runRepository = runRepository;
 		this.feedRepository = feedRepository;
 		this.articleRepository = articleRepository;
 		this.articleStore = articleStore;
+		this.articleProcessor = articleProcessor;
+		this.tenantRepository = tenantRepository;
 		this.readers = readers;
 		this.executor = executor;
 	}
@@ -104,8 +109,13 @@ public class NewsRunner {
 				fetch(feed);
 			}
 			NewsRun run = this.runRepository.findById(runId).orElseThrow();
-			run.countArticles(unprocessedCount(tenantId));
-			process(run);
+			List<Article> waiting = this.articleRepository.findUnprocessedOfTenant(tenantId);
+			run.countArticles(waiting.size());
+			this.runRepository.save(run);
+			// Loaded by id rather than taken off the run: the run comes out of a transaction that
+			// has since closed, and its tenant is a proxy that would throw when touched.
+			Tenant tenant = this.tenantRepository.findById(tenantId).orElseThrow();
+			process(run, tenant, waiting);
 			run.finish();
 			this.runRepository.save(run);
 		} catch (RuntimeException e) {
@@ -133,18 +143,38 @@ public class NewsRunner {
 		this.feedRepository.save(feed);
 	}
 
-	private int unprocessedCount(UUID tenantId) {
-		return (int) this.articleRepository.findAllOfTenant(tenantId).stream()
-				.filter(Article::isUnprocessed)
-				.count();
-	}
-
 	/**
-	 * Where the AI stage goes. Empty for now, which is why every story sits on the board under
-	 * "Sonstiges" without a ranking: the fetching is what this step promises, and the rating is
-	 * the next one.
+	 * Hands the unrated stories to the AI in bundles, counting up after each one so the progress
+	 * bar moves through the slow part rather than standing still until the end.
+	 *
+	 * <p>A bundle that fails leaves its stories unrated and the pass carries on; they show as
+	 * "noch nicht bewertet" and go along next time. Only when every bundle failed does the pass
+	 * itself count as failed.
+	 *
+	 * <p>The message then carries what actually went wrong rather than naming a cause. Having no
+	 * key looks like this, but so does a key that was rejected, a model that is not reachable and
+	 * an answer that could not be read — and a message that says "check your key" when the key is
+	 * fine sends somebody looking in the wrong place. It was written that way first, and cost an
+	 * evening.
 	 */
-	private void process(NewsRun run) {
-		// Deliberately nothing yet.
+	private void process(NewsRun run, Tenant tenant, List<Article> waiting) {
+		int bundles = 0;
+		int failed = 0;
+		String lastFailure = null;
+		for (int from = 0; from < waiting.size(); from += ArticleProcessor.BATCH_SIZE) {
+			List<Article> batch = waiting.subList(from, Math.min(from + ArticleProcessor.BATCH_SIZE, waiting.size()));
+			bundles++;
+			ArticleProcessor.Outcome outcome = this.articleProcessor.process(tenant, batch);
+			if (outcome.rated() == 0) {
+				failed++;
+				lastFailure = outcome.failure();
+			}
+			run.advanceBy(batch.size());
+			this.runRepository.save(run);
+		}
+		if (bundles > 0 && failed == bundles) {
+			throw new IllegalStateException("no story could be rated"
+					+ (lastFailure == null ? "" : ": " + lastFailure));
+		}
 	}
 }

@@ -33,6 +33,7 @@
     "unplaced": "Sonstiges",
     "unplacedHint": "Meldungen ohne Kategorie: noch nicht bewertet, oder die KI konnte sie nicht einordnen.",
     "notRated": "noch nicht bewertet",
+    "readOriginal": "Zum Original",
     "rankingLabel": "Ranking {{ranking}} von 10",
     "empty": "Noch keine Meldungen. Drücken Sie Aktualisieren, um die Quellen zu holen.",
     "startError": "Der Lauf konnte nicht gestartet werden.",
@@ -65,7 +66,7 @@
     "saveError": "Die Kategorie konnte nicht gespeichert werden.",
     "deleteError": "Die Kategorie konnte nicht gelöscht werden.",
     "loadError": "Die Kategorien konnten nicht geladen werden. Läuft das Backend?",
-    "vocabularyHint": "Aus dieser Liste wählt die KI, wenn sie eine Meldung einsortiert. Wenige Begriffe mit klarer Bedeutung trifft sie zuverlässiger als viele, die sich überschneiden."
+    "vocabularyHint": "Aus dieser Liste wählt die KI, wenn sie eine Meldung einsortiert — und zwar die engste, die zutrifft. Begriffe, die ineinanderliegen, sind deshalb in Ordnung: „Sport\", „NFL\" und „Miami Dolphins\" dürfen nebeneinanderstehen. Schlecht sind Begriffe, die sich kreuzen, ohne dass einer im anderen steckt."
   },
   "feeds": {
     "title": "Quellen",

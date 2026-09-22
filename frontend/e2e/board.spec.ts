@@ -24,7 +24,7 @@ const placed = {
   link: 'https://kicker.example/aufstieg',
   publishedAt: '2026-09-20T10:00:00Z',
   teaser: 'Ein Tor in der Nachspielzeit entscheidet die Saison.',
-  positiveSummary: null,
+  positiveSummary: 'Der Aufstieg ist nach einem Tor in der Nachspielzeit geschafft.',
   ranking: 8,
 };
 
@@ -70,6 +70,17 @@ test.describe('Board', () => {
     await expect(page.getByRole('link', { name: 'Aufstieg in letzter Minute' })).toBeVisible();
   });
 
+  /** The gist is ours and leads; the title is what the source wrote and stays as the link. */
+  test('leads a rated story with its gist and keeps the original title as the link', async ({ page }) => {
+    await page.route(/\/api\/news\/articles/, (route) => route.fulfill({ json: [placed] }));
+
+    await page.goto('/');
+
+    await expect(page.getByRole('heading', { name: /Der Aufstieg ist nach einem Tor/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Aufstieg in letzter Minute' })).toBeVisible();
+    await expect(page.getByLabel('Ranking 8 von 10')).toHaveText('8');
+  });
+
   /**
    * Until the AI stage exists nothing comes back rated, so in practice the whole board sits in
    * this tab. It is the honest picture of where the application stands rather than a fault.
@@ -83,7 +94,9 @@ test.describe('Board', () => {
     await expect(page.getByText('Meldungen ohne Kategorie', { exact: false })).toBeVisible();
     // Scoped to the card: the hint above the list says the same words about the whole tab.
     await expect(page.getByRole('article').getByText('noch nicht bewertet')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Noch nicht einsortiert' })).toBeVisible();
+    // Without a gist the original title is the heading, and the link says where it goes.
+    await expect(page.getByRole('heading', { name: 'Noch nicht einsortiert' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Zum Original' })).toBeVisible();
   });
 
   test('says so while nothing has been fetched yet', async ({ page }) => {
@@ -131,7 +144,7 @@ test.describe('Board', () => {
     await expect(page.getByText('Die Quellen werden geholt')).toHaveCount(0);
   });
 
-  test('passes the chosen threshold to the backend', async ({ page }) => {
+  test('passes the chosen threshold to the backend and remembers it', async ({ page }) => {
     const asked: string[] = [];
     await page.route(/\/api\/news\/articles/, (route) => {
       asked.push(new URL(route.request().url()).searchParams.get('minRanking') ?? '');
@@ -140,7 +153,10 @@ test.describe('Board', () => {
 
     await page.goto('/');
     await page.getByLabel('Ab Ranking').selectOption('7');
-
     await expect.poll(() => asked).toContain('7');
+
+    // Somebody who reads only what matters should not have to say so again every morning.
+    await page.reload();
+    await expect(page.getByLabel('Ab Ranking')).toHaveValue('7');
   });
 });

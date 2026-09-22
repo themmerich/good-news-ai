@@ -8,6 +8,16 @@ import { OrderedCategory, sortCategories } from './category-order';
  */
 
 /**
+ * The thresholds worth offering. Finer steps would be a slider nobody asked for, and the scale
+ * the AI works to has four bands, not eleven.
+ */
+export const THRESHOLDS = [0, 4, 7, 9] as const;
+
+export function isThreshold(value: number): boolean {
+  return (THRESHOLDS as readonly number[]).includes(value);
+}
+
+/**
  * One tab. The bucket at the end is not one of these: it stands for the absence of a category
  * rather than for a category, and giving it a nullable field here would make every template that
  * touches a tab assert the field is there.

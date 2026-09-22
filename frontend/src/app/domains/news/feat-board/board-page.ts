@@ -8,11 +8,8 @@ import { TabsModule } from 'primeng/tabs';
 import { ArticlesService } from '../data/articles-service';
 import { CatalogService } from '../data/catalog-service';
 import { NewsRunStore } from '../data/news-run-store';
-import { buildBoard } from '../model/article-board';
+import { buildBoard, THRESHOLDS } from '../model/article-board';
 import { ArticleCard } from '../ui/article-card';
-
-/** The thresholds worth offering. Finer steps would be a slider nobody asked for. */
-const THRESHOLDS = [0, 4, 7, 9];
 
 /** The bucket has no category to be named by, so it needs a value of its own. */
 const UNPLACED_TAB = 'unplaced';

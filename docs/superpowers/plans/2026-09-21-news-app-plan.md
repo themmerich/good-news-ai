@@ -359,11 +359,16 @@ und die Liste lässt sich darüber eindampfen. Erst hier füllen sich die Tabs. 
    passt eine Nummer nicht, bleiben die betroffenen Artikel unverarbeitet.
 
 2. **Der Auftrag an das Modell** — Kernaussage benennen, den konstruktiven Teil nach vorn, nichts
-   hinzuerfinden, nichts beschönigen. Die Kategorie aus der mitgegebenen Liste wählen, und
-   ausdrücklich keine, wenn nichts passt. Für das Ranking der Maßstab aus dem Entwurf: 0–3
+   hinzuerfinden, nichts beschönigen. Aus der mitgegebenen Liste die **engste** passende Kategorie
+   wählen, ersatzweise die nächstweitere, und ausdrücklich keine, wenn nichts passt. Damit
+   erledigt sich „Miami Dolphins, sonst NFL, sonst Sport" ohne Hierarchie im Datenmodell: Dass die
+   Dolphins ein NFL-Team sind, weiß das Modell selbst. Für das Ranking der Maßstab aus dem Entwurf: 0–3
    Randnotiz, 4–6 Alltägliches, 7–8 Bemerkenswertes, 9–10 Einschneidendes, gemessen innerhalb der
    gerade vergebenen Kategorie. Der Text gehört in eine eigene Datei unter `resources`, nicht in
-   einen Java-String, damit man ihn ändern kann, ohne den Code zu lesen.
+   einen Java-String, damit man ihn ändern kann, ohne den Code zu lesen. Die Platzhalter werden
+   von Hand ersetzt statt über eine Template-Maschine: Titel und Teaser kommen aus dem offenen
+   Internet und bringen beliebige Zeichen mit, und ein Renderer, der geschweifte oder spitze
+   Klammern für Syntax hält, scheitert an der ersten Meldung über Quelltext.
 
 3. **`NewsRunner` erweitern** — die leere Stufe aus Schritt 4 ruft jetzt den Prozessor, Bündel für
    Bündel, und zählt nach jedem Bündel hoch.
@@ -371,7 +376,10 @@ und die Liste lässt sich darüber eindampfen. Erst hier füllen sich die Tabs. 
 4. **`minRanking` wirksam machen** — Artikel ohne Auswertung kommen bei jeder Schwelle mit.
 
 5. **Kein KI-Zugang** — der Lauf endet als `FAILED` mit einem Text, der auf die Seite KI-Zugang
-   verweist. Die Artikel sind dann geholt und stehen unbewertet unter _Sonstiges_.
+   verweist. Die Artikel sind dann geholt und stehen unbewertet unter _Sonstiges_. Erkannt wird
+   der Fall daran, dass **jedes** Bündel gescheitert ist; ein einzelnes gescheitertes Bündel lässt
+   den Lauf als `DONE` enden. Den Fehlertext des Anbieters auszuwerten, um es genauer zu
+   unterscheiden, wäre eine Abhängigkeit von etwas, das uns nicht gehört.
 
 6. **Tests** — `ArticleProcessorTest` gegen `StubChatClients` aus den bestehenden Testquellen:
    Bündelung, Auslesen des Rankings, Zuordnung der Kategorie über den Namen samt abweichender
@@ -391,7 +399,14 @@ und die Liste lässt sich darüber eindampfen. Erst hier füllen sich die Tabs. 
 9. **Sortierung** — Ranking absteigend, bei Gleichstand nach Datum. Gehört in `model/` und bekommt
    dort seinen Test.
 
-10. **Tests** — Modelltests für Sortierung und Filter, e2e für das Setzen der Schwelle.
+10. **Hinweis auf der Kategorienseite nachziehen** — `categories.vocabularyHint` warnt heute vor
+    Begriffen, die sich überschneiden. Mit der Regel „die engste gewinnt" sind ineinanderliegende
+    Begriffe erwünscht; schlecht sind nur die, die sich kreuzen. Der Satz muss das sagen, sonst
+    rät er zum Gegenteil dessen, was der Auftragstext tut.
+
+11. **Tests** — Modelltests für Sortierung und Filter, e2e für das Setzen der Schwelle. Dazu im
+    `ArticleProcessorTest` der Fall, dass bei „Sport", „NFL" und „Miami Dolphins" in der Liste die
+    engste gewählt wird.
 
 ### Fertig, wenn
 
