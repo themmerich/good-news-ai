@@ -3,6 +3,8 @@ package de.prime_ux.goodnews.news;
 import de.prime_ux.goodnews.aisettings.ChatClients;
 import de.prime_ux.goodnews.catalog.Category;
 import de.prime_ux.goodnews.catalog.CategoryRepository;
+import de.prime_ux.goodnews.costs.AiCalls;
+import de.prime_ux.goodnews.costs.Purpose;
 import de.prime_ux.goodnews.tenants.Tenant;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -14,8 +16,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -59,14 +61,16 @@ public class ArticleProcessor {
 	private final ChatClients chatClients;
 	private final CategoryRepository categoryRepository;
 	private final ArticleRepository articleRepository;
+	private final AiCalls aiCalls;
 	private final String instructions;
 
 	ArticleProcessor(ChatClients chatClients, CategoryRepository categoryRepository,
-			ArticleRepository articleRepository,
+			ArticleRepository articleRepository, AiCalls aiCalls,
 			@Value("classpath:prompts/rate-articles.md") Resource instructions) {
 		this.chatClients = chatClients;
 		this.categoryRepository = categoryRepository;
 		this.articleRepository = articleRepository;
+		this.aiCalls = aiCalls;
 		this.instructions = read(instructions);
 	}
 
@@ -95,6 +99,9 @@ public class ArticleProcessor {
 			log.warn("a bundle of {} stories could not be rated", batch.size(), e);
 			return new Outcome(0, describe(e));
 		}
+		// Booked before the answer is read: a bundle that came back unusable was paid for all the
+		// same, and a page that left those out would not agree with the invoice.
+		this.aiCalls.record(tenant, Purpose.RATING, response);
 		String text = textOf(response);
 		if (text.isBlank()) {
 			String why = "the model answered with no text at all (" + accountOf(response) + ")";

@@ -10,6 +10,8 @@ import de.prime_ux.goodnews.catalog.CategoryRepository;
 import de.prime_ux.goodnews.catalog.Feed;
 import de.prime_ux.goodnews.catalog.FeedRepository;
 import de.prime_ux.goodnews.catalog.SourceType;
+import de.prime_ux.goodnews.costs.Purpose;
+import de.prime_ux.goodnews.costs.StubAiCalls;
 import de.prime_ux.goodnews.tenants.Tenant;
 import de.prime_ux.goodnews.tenants.TenantRepository;
 import java.time.Instant;
@@ -32,6 +34,9 @@ class ArticleProcessorTest {
 
 	/** What the stood-in model answered last, for the tests that read the prompt it was handed. */
 	private StubChatClients chat;
+
+	/** The bookings the processor made, for the tests that ask whether the call was paid for. */
+	private StubAiCalls aiCalls;
 
 	@Autowired
 	private ArticleRepository articleRepository;
@@ -220,6 +225,49 @@ class ArticleProcessorTest {
 	}
 
 	/**
+	 * One booking per bundle, not per story: ten stories go to the model in one call and are
+	 * billed as one. A cost per story would be a division nobody was ever charged for.
+	 */
+	@Test
+	void booksOneCostForTheWholeBundle() {
+		ArticleProcessor processor = answering("""
+				{"ratings": [{"number": 1, "summary": "Eins.", "category": "Sport", "ranking": 5},
+				{"number": 2, "summary": "Zwei.", "category": "Sport", "ranking": 5},
+				{"number": 3, "summary": "Drei.", "category": "Sport", "ranking": 5}]}""");
+
+		processor.process(this.tenant, List.of(article("Erste"), article("Zweite"), article("Dritte")));
+
+		assertThat(this.aiCalls.bookings()).singleElement()
+				.satisfies(booking -> {
+					assertThat(booking.purpose()).isEqualTo(Purpose.RATING);
+					assertThat(booking.tenant().getId()).isEqualTo(this.tenant.getId());
+				});
+	}
+
+	/**
+	 * An answer that could not be read was paid for like any other. Booking only the successful
+	 * calls would leave the page below the invoice with nothing to show for the difference.
+	 */
+	@Test
+	void booksTheCostOfAnAnswerItCouldNotRead() {
+		ArticleProcessor processor = answering("kein JSON, nur Text");
+
+		processor.process(this.tenant, List.of(article("Unlesbar")));
+
+		assertThat(this.aiCalls.bookings()).hasSize(1);
+	}
+
+	/** A call that never reached the provider was never billed either. */
+	@Test
+	void booksNothingWhenTheCallFails() {
+		ArticleProcessor processor = processorUsing(StubChatClients.failing("invalid x-api-key"));
+
+		processor.process(this.tenant, List.of(article("Ohne Zugang")));
+
+		assertThat(this.aiCalls.bookings()).isEmpty();
+	}
+
+	/**
 	 * A processor whose model answers this. Built by hand rather than taken from the context: the
 	 * answer differs per test, and a bean is made once when the context starts.
 	 */
@@ -229,7 +277,8 @@ class ArticleProcessorTest {
 
 	private ArticleProcessor processorUsing(StubChatClients chatClients) {
 		this.chat = chatClients;
-		return new ArticleProcessor(chatClients, this.categoryRepository, this.articleRepository,
+		this.aiCalls = new StubAiCalls();
+		return new ArticleProcessor(chatClients, this.categoryRepository, this.articleRepository, this.aiCalls,
 				new ClassPathResource("prompts/rate-articles.md"));
 	}
 
