@@ -1,0 +1,78 @@
+<ng-container *transloco="let t">
+  <main class="flex flex-col gap-4">
+    <h1 class="text-2xl font-semibold">{{ t('costs.title') }}</h1>
+    <p class="text-surface-500 dark:text-surface-400">{{ t('costs.intro') }}</p>
+
+    <!-- value() throws while the resource is in the error state, so the tiles only render in the else branch. -->
+    @if (costsService.summary.error()) {
+      <p class="text-red-600 dark:text-red-400">{{ t('costs.summaryError') }}</p>
+    } @else if (costsService.summary.isLoading()) {
+      <div class="flex items-center justify-center py-8" role="status" [attr.aria-label]="t('costs.loading')">
+        <i class="pi pi-spinner pi-spin text-3xl text-surface-400 dark:text-surface-500" aria-hidden="true"></i>
+      </div>
+    } @else {
+      <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        @for (period of periods(); track period.key) {
+          <li class="rounded-lg border border-surface-200 p-4 dark:border-surface-700">
+            <p class="text-sm text-surface-500 dark:text-surface-400">{{ t(period.label) }}</p>
+            <p class="text-2xl font-semibold">{{ period.cost | currency: 'USD' : 'symbol' : '1.2-2' }}</p>
+            <p class="text-sm text-surface-500 dark:text-surface-400">{{ t('costs.calls', { count: period.calls }) }}</p>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (costsService.calls.error()) {
+      <p class="text-red-600 dark:text-red-400">{{ t('costs.callsError') }}</p>
+    } @else {
+      <p-table
+        [value]="costsService.calls.value().calls"
+        dataKey="id"
+        [lazy]="true"
+        [paginator]="true"
+        [rows]="pageSize"
+        [totalRecords]="costsService.calls.value().totalCalls"
+        [loading]="costsService.calls.isLoading()"
+        (onLazyLoad)="onPageChange($event)"
+      >
+        <ng-template #header>
+          <tr>
+            <th scope="col">{{ t('costs.calledAt') }}</th>
+            <th scope="col">{{ t('costs.purpose') }}</th>
+            <th scope="col">{{ t('costs.model') }}</th>
+            <th scope="col" class="text-right">{{ t('costs.inputTokens') }}</th>
+            <th scope="col" class="text-right">{{ t('costs.outputTokens') }}</th>
+            <th scope="col" class="text-right">{{ t('costs.cost') }}</th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-row>
+          <tr>
+            <td>{{ row.calledAt | date: 'short' }}</td>
+            <td>
+              <p-tag
+                [severity]="row.purpose === 'RATING' ? 'info' : 'secondary'"
+                [value]="t(row.purpose === 'RATING' ? 'costs.purposeRating' : 'costs.purposeKeyTest')"
+              />
+            </td>
+            <td>{{ row.model }}</td>
+            <td class="text-right tabular-nums">{{ row.inputTokens | number }}</td>
+            <td class="text-right tabular-nums">{{ row.outputTokens | number }}</td>
+            <td class="text-right tabular-nums">
+              <!-- No rate for that model: the amount is unknown, which is not the same as zero. -->
+              @if (row.costUsd === null) {
+                <span [attr.aria-label]="t('costs.noAmount')">&mdash;</span>
+              } @else {
+                {{ row.costUsd | currency: 'USD' : 'symbol' : '1.2-4' }}
+              }
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="6">{{ t('costs.empty') }}</td>
+          </tr>
+        </ng-template>
+      </p-table>
+    }
+  </main>
+</ng-container>
